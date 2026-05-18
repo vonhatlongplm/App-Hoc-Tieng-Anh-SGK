@@ -26,9 +26,22 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
       ? `Bạn là một chuyên gia gia sư AI. Nhiệm vụ của bạn là giảng dạy, giải thích từ vựng và ngữ pháp có trong phần tài liệu này. Khuyến khích người dùng đặt câu hỏi. Luôn định dạng nội dung bằng Markdown đẹp mắt.`
       : `Bạn là một giám khảo và gia sư chấm điểm luyện thi. Nhiệm vụ của bạn là trích xuất từng câu hỏi một trong đề thi, hỏi sinh viên, đợi họ trả lời, sau đó chấm điểm và giải thích chi tiết đáp án đúng sai, cuối cùng chuyển sang câu tiếp theo. Định dạng nội dung bằng Markdown.`;
 
-  const finalSystemInstruction = documentContent.startsWith('FILE_URI::') 
-    ? systemInstruction 
-    : `${systemInstruction}\n\nTài liệu của sinh viên: \n\n${documentContent}`;
+  let parsedItems: any[] = [];
+  try {
+      parsedItems = JSON.parse(documentContent);
+  } catch (e) {
+      if (documentContent.startsWith('FILE_URI::')) {
+          const split = documentContent.split('::');
+          parsedItems = [{ type: 'file', uri: split[1], mime: split[2], name: split[3] }];
+      } else {
+          parsedItems = [{ type: 'text', content: documentContent }];
+      }
+  }
+
+  const rawTextContent = parsedItems.filter((i: any) => i.type === 'text').map((i: any) => i.content).join('\n---\n');
+  const finalSystemInstruction = rawTextContent 
+    ? `${systemInstruction}\n\nTài liệu tham khảo dạng text của sinh viên: \n\n${rawTextContent}`
+    : systemInstruction;
 
   // Start the chat by letting the AI say something first
   useEffect(() => {
@@ -65,31 +78,21 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
           chatHistory.push({ id: 'temp', role: 'user', text: textToSend });
       }
 
-      // Convert history to contents format for the SDK
       const contents = [];
-      const parts = [];
-      let hasFile = false;
-      let fileUri = '', fileMime = '';
-
-      if (documentContent.startsWith('FILE_URI::')) {
-          const split = documentContent.split('::');
-          fileUri = split[1];
-          fileMime = split[2];
-          hasFile = true;
-      }
+      
+      const documentParts = parsedItems
+            .filter((i: any) => i.type === 'file')
+            .map((i: any) => ({ fileData: { fileUri: i.uri, mimeType: i.mime } }));
 
       if (isFirstInitial) {
-          if (hasFile) {
-            parts.push({ fileData: { fileUri, mimeType: fileMime } });
-          }
-          parts.push({ text: textToSend });
+          const parts = [...documentParts, { text: textToSend }];
           contents.push({ role: 'user', parts });
       } else {
           for (let i = 0; i < chatHistory.length; i++) {
              const m = chatHistory[i];
              // Attach the file Data to the VERY FIRST user message in history
-             if (i === 0 && hasFile && m.role === 'user') {
-                contents.push({ role: m.role, parts: [{ fileData: { fileUri, mimeType: fileMime } }, { text: m.text }] });
+             if (i === 0 && documentParts.length > 0 && m.role === 'user') {
+                contents.push({ role: m.role, parts: [...documentParts, { text: m.text }] });
              } else {
                 contents.push({ role: m.role, parts: [{ text: m.text }] });
              }
