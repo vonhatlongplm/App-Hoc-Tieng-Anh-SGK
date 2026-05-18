@@ -70,7 +70,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
 
         setUploadStatus(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
 
-        const res = await fetch('/api/gemini/upload', {
+        const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

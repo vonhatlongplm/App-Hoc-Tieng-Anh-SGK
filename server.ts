@@ -16,7 +16,7 @@ async function startServer() {
   app.use(express.json({ limit: "500mb" }));
   app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
-  app.post("/api/gemini/upload", async (req, res) => {
+  app.post("/api/upload", async (req, res) => {
     try {
       const { base64, mimeType, name } = req.body;
       if (!base64) {
@@ -50,7 +50,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/gemini/generate", async (req, res) => {
+  app.post("/api/generate", async (req, res) => {
     try {
       const { contents, systemInstruction } = req.body;
       

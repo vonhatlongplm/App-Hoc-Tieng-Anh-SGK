@@ -26,6 +26,7 @@ export default async function handler(req: any, res: any) {
     const { base64, mimeType, name } = req.body;
     if (!base64) return res.status(400).json({ error: "No file content" });
     
+    // Sanitize the file name
     const safeName = (name || 'upload').replace(/[^a-zA-Z0-9.-]/g, '_');
     const tmpFilePath = path.join(os.tmpdir(), `up_${Date.now()}_${safeName.slice(-20)}`);
     
@@ -47,7 +48,7 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (err: any) {
-    console.error("Vercel Upload Detail Error:", err);
+    console.error("Vercel Upload Error:", err);
     res.status(500).json({ error: err.message || "Upload failed" });
   }
 }

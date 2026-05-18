@@ -107,7 +107,7 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
           }
       }
 
-      const res = await fetch('/api/gemini/generate', {
+      const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
