@@ -24,27 +24,31 @@ async function startServer() {
   app.use(express.json({ limit: "250mb" }));
   app.use(express.urlencoded({ limit: "250mb", extended: true }));
 
-  app.post("/api/gemini/upload", upload.single("file"), async (req, res) => {
+  app.post("/api/gemini/upload", async (req, res) => {
     try {
-      if (!req.file) {
+      const { base64, mimeType, name } = req.body;
+      if (!base64) {
         return res.status(400).json({ error: "No file content" });
       }
       
+      const tmpFilePath = path.join(os.tmpdir(), `upload_${Date.now()}_${name}`);
+      fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
+
       const file = await ai.files.upload({
-        file: req.file.path,
+        file: tmpFilePath,
         config: {
-          mimeType: req.file.mimetype,
-          displayName: req.file.originalname,
+          mimeType,
+          displayName: name,
         }
       });
       
       // Cleanup temp file
-      fs.unlinkSync(req.file.path);
+      fs.unlinkSync(tmpFilePath);
       
       res.json({
         fileUri: file.uri,
-        mimeType: file.mimeType || req.file.mimetype,
-        name: req.file.originalname
+        mimeType: file.mimeType || mimeType,
+        name
       });
     } catch (err: any) {
       console.error(err);
