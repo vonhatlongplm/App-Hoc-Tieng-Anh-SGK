@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+
+    function isValidProgress(data) {
+      return data.keys().hasAll(['uid', 'email', 'documentContent', 'appMode', 'messages', 'updatedAt']) 
+        && data.keys().size() == 6
+        && data.uid is string && data.uid.size() <= 128
+        && data.email is string && data.email.size() <= 256
+        && data.documentContent is string
+        && data.appMode is string && data.appMode.size() <= 64
+        && data.messages is list && data.messages.size() <= (1000)
+        && data.updatedAt is number;
+    }
+
+    match /progress/{uid} {
+      // User can only read their own progress
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      
+      allow create: if isSignedIn() 
+        && request.auth.uid == uid
+        && isValidProgress(request.resource.data)
+        && request.resource.data.uid == request.auth.uid;
+
+      allow update: if (
+        isSignedIn()
+        && request.auth.uid == uid
+        && isValidProgress(request.resource.data)
+        && request.resource.data.uid == resource.data.uid // Immutable
+        && (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentContent', 'appMode', 'messages', 'updatedAt', 'email'])
+        )
+      );
+
+      // We clear progress by unsetting or clearing document content?
+      // Our clear progress just does setDoc which replaces the doc, calling 'create' or 'update'.
+    }
+  }
+}

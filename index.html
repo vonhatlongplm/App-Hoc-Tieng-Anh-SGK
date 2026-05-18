@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tutor - Học theo mọi giáo trình</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overscroll-behavior: none; height: 100dvh; overflow: hidden; }
+        .serif { font-family: 'Merriweather', serif; }
+        .latex-formula { font-family: 'Courier New', monospace; background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; color: #d97706; }
+
+        /* Landscape Mobile Optimizations */
+        @media (max-width: 820px) and (orientation: landscape) {
+            .messages-container {
+                padding: 1rem; /* Reduce padding */
+            }
+            main > header {
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+            }
+            .responsive-grid {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            }
+            /* LessonView specific optimizations for landscape */
+            .messages-container .p-4 {
+                padding: 0.6rem 0.8rem;
+                font-size: 0.9rem;
+            }
+            .messages-container .text-slate-700.leading-relaxed, .messages-container .whitespace-pre-wrap {
+                line-height: 1.4;
+            }
+            .landscape-input-wrapper {
+                padding: 0.5rem !important;
+            }
+            .landscape-input-wrapper textarea {
+                max-height: 5rem; /* 80px */
+                padding: 0.6rem 0.8rem !important;
+            }
+            .landscape-input-wrapper button {
+                padding: 0.6rem !important;
+            }
+            .landscape-input-wrapper .lucide { /* target icons inside buttons */
+                width: 18px;
+                height: 18px;
+            }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,11 +1,35 @@
-<div align="center">
+# Aptis ESOL B2 Master Tutor - AI Powered
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+This is an AI-powered web application designed to help students prepare for the Aptis ESOL B2 exam. It features a personalized learning roadmap, AI-driven feedback, and cloud synchronization for user progress.
 
-  <h1>Built with AI Studio</h2>
+## Deployment
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+This application is designed to be deployed on a platform like **Vercel** or **Netlify**.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+### 1. Supabase Setup (Database)
 
-</div>
+1.  Create a new project on [Supabase](https://supabase.com/).
+2.  Go to the **SQL Editor**.
+3.  Run the following query to create the necessary table for storing user profiles:
+
+    ```sql
+    CREATE TABLE profiles (
+      user_id TEXT PRIMARY KEY,
+      profile_data JSONB,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    ```
+
+### 2. Environment Variables
+
+When deploying your application (e.g., on Vercel), you need to configure the following environment variables to connect to your Supabase project.
+
+1.  Go to your Supabase project's **Settings > API**.
+2.  Find your **Project URL** and the **`anon` `public` API Key**.
+3.  Set them as environment variables in your deployment platform:
+
+    -   `SUPABASE_URL`: Your Supabase Project URL.
+    -   `SUPABASE_ANON_KEY`: Your Supabase `anon` `public` API Key.
+    -   `API_KEY`: Your Google AI (Gemini) API Key.
+
+After setting these up, your application will be able to connect to the database to save and load student progress, and the teacher dashboard will function correctly.
