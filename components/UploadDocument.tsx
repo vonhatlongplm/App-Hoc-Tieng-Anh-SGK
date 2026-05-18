@@ -35,25 +35,12 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
     setIsUploading(true);
 
     try {
-      const base64Str = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64 = result.split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const formData = new FormData();
+      formData.append('file', file);
 
       const res = await fetch('/api/gemini/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          mimeType: file.type,
-          base64: base64Str
-        }),
+        body: formData,
       });
 
       const responseText = await res.text();
