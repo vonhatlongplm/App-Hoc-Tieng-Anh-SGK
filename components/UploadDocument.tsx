@@ -16,24 +16,27 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-50">
-      <div className="max-w-3xl w-full flex flex-col items-center">
+    <div className="w-full h-full flex flex-col items-center justify-start p-6 bg-slate-50 overflow-y-auto pb-16">
+      <div className="max-w-3xl w-full flex flex-col items-center mt-8 sm:mt-16">
         <div className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
             AI Gia sư Cá nhân của bạn
           </h1>
-          <p className="text-lg text-slate-600">
-            Tải lên bất kỳ tài liệu, sách giáo khoa hoặc đề thi nào để bắt đầu hành trình học tập.
+          <p className="text-lg text-slate-600 mb-2">
+            Copy nội dung bài học, đoạn văn bản từ Sách Giáo Khoa hoặc Đề thi và dán vào bên dưới.
+          </p>
+          <p className="text-md text-slate-500">
+            Hệ thống hỗ trợ dạng văn bản (text). Bạn hãy bôi đen nội dung trong PDF/Word, nhấn Copy (Ctrl+C) và Paste (Ctrl+V) vào khung dưới đây.
           </p>
         </div>
 
         <div className="w-full bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden text-left p-8">
           <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">
-            Nội dung tài liệu (Paste raw text for now)
+            Nội dung bài học / Đề thi
           </label>
           <textarea
-            className="w-full h-48 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition resize-none mb-8 font-mono text-sm leading-relaxed"
-            placeholder="Dán nội dung tài liệu của bạn vào đây..."
+            className="w-full h-48 sm:h-64 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition resize-y mb-8 font-mono text-sm leading-relaxed"
+            placeholder="Ví dụ: Copy một bài Reading tiếng Anh lớp 10 và dán vào đây..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
