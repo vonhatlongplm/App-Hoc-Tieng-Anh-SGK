@@ -83,7 +83,7 @@ const App: React.FC = () => {
 
   const handleStartOver = async () => {
     if (currentUser?.uid) {
-      await clearProgressFromFirebase(currentUser.uid);
+      await clearProgressFromFirebase(currentUser.uid, currentUser.email);
     }
     setDocumentContent('');
     setMessages([]);

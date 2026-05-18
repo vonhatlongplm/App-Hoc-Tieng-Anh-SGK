@@ -35,13 +35,12 @@ export async function testConnection() {
 }
 testConnection();
 
-export async function loginWithGoogle() {
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
+export async function simpleEmailLogin(email: string) {
+  return { uid: email.toLowerCase(), email: email.toLowerCase() };
 }
 
 export async function logoutUser() {
-  await signOut(auth);
+  // Do nothing
 }
 
 export async function saveProgressToFirebase(uid: string, email: string, documentContent: string, appMode: AppMode, messages: Message[]) {
@@ -68,13 +67,13 @@ export async function loadProgressFromFirebase(uid: string): Promise<SavedProgre
   return null;
 }
 
-export async function clearProgressFromFirebase(uid: string) {
+export async function clearProgressFromFirebase(uid: string, email: string) {
   if (!uid) return;
   // Just clear it by overwriting with empty
   const progressRef = doc(db, 'progress', uid);
   const data: SavedProgress = {
     uid,
-    email: auth.currentUser?.email || '',
+    email: email || '',
     documentContent: '',
     appMode: 'LEARN_BOOK',
     messages: [],
