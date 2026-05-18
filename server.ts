@@ -2,6 +2,9 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import multer from "multer";
+import fs from "fs";
+import os from "os";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -12,11 +15,40 @@ const ai = new GoogleGenAI({
   }
 });
 
+const upload = multer({ dest: os.tmpdir() });
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: "50mb" }));
+
+  app.post("/api/gemini/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const file = await ai.files.upload({
+        file: req.file.path,
+        config: {
+          mimeType: req.file.mimetype,
+        }
+      });
+      
+      // Cleanup temp file
+      fs.unlinkSync(req.file.path);
+      
+      res.json({
+        fileUri: file.uri,
+        mimeType: file.mimeType,
+        name: req.file.originalname
+      });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   app.post("/api/gemini/generate", async (req, res) => {
     try {

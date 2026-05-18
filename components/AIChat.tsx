@@ -23,13 +23,17 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
   
   const systemInstruction = 
     mode === 'LEARN_BOOK' 
-      ? `Bạn là một chuyên gia gia sư AI. Tài liệu của sinh viên: \n\n${documentContent}\n\nNhiệm vụ của bạn là giảng dạy, giải thích từ vựng và ngữ pháp có trong phần tài liệu này. Khuyến khích người dùng đặt câu hỏi. Luôn định dạng nội dung bằng Markdown đẹp mắt.`
-      : `Bạn là một giám khảo và gia sư chấm điểm luyện thi. Tài liệu (đề thi) của sinh viên: \n\n${documentContent}\n\nNhiệm vụ của bạn là trích xuất từng câu hỏi một trong đề thi, hỏi sinh viên, đợi họ trả lời, sau đó chấm điểm và giải thích chi tiết đáp án đúng sai, cuối cùng chuyển sang câu tiếp theo. Định dạng nội dung bằng Markdown.`;
+      ? `Bạn là một chuyên gia gia sư AI. Nhiệm vụ của bạn là giảng dạy, giải thích từ vựng và ngữ pháp có trong phần tài liệu này. Khuyến khích người dùng đặt câu hỏi. Luôn định dạng nội dung bằng Markdown đẹp mắt.`
+      : `Bạn là một giám khảo và gia sư chấm điểm luyện thi. Nhiệm vụ của bạn là trích xuất từng câu hỏi một trong đề thi, hỏi sinh viên, đợi họ trả lời, sau đó chấm điểm và giải thích chi tiết đáp án đúng sai, cuối cùng chuyển sang câu tiếp theo. Định dạng nội dung bằng Markdown.`;
+
+  const finalSystemInstruction = documentContent.startsWith('FILE_URI::') 
+    ? systemInstruction 
+    : `${systemInstruction}\n\nTài liệu của sinh viên: \n\n${documentContent}`;
 
   // Start the chat by letting the AI say something first
   useEffect(() => {
     if (messages.length === 0) {
-        handleSend("Xin chào, hãy bắt đầu quá trình học/đánh giá với tôi nhé. Vui lòng cho tôi biết những gì bạn tìm thấy trong tài liệu để chúng ta bắt đầu.");
+        handleSend("Xin chào, hãy bắt đầu quá trình học/đánh giá với tôi nhé. Vui lòng đọc tài liệu (nếu có) để chúng ta bắt đầu.");
     }
   }, []);
 
@@ -47,10 +51,6 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
 
     if (!forcedInput) setInput('');
 
-    // If it's a forced intro prompt, don't show it as a user message visually in an ideal app, 
-    // but for simplicity here we just send it to backend and let the AI respond. 
-    // Actually, if it's the very first automated prompt, we can just fetch without appending user message 
-    // to the UI or append a silent one.
     const isFirstInitial = !!forcedInput && messages.length === 0;
 
     if (!isFirstInitial) {
@@ -67,11 +67,32 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
 
       // Convert history to contents format for the SDK
       const contents = [];
+      const parts = [];
+      let hasFile = false;
+      let fileUri = '', fileMime = '';
+
+      if (documentContent.startsWith('FILE_URI::')) {
+          const split = documentContent.split('::');
+          fileUri = split[1];
+          fileMime = split[2];
+          hasFile = true;
+      }
+
       if (isFirstInitial) {
-          contents.push({ role: 'user', parts: [{ text: textToSend }] });
+          if (hasFile) {
+            parts.push({ fileData: { fileUri, mimeType: fileMime } });
+          }
+          parts.push({ text: textToSend });
+          contents.push({ role: 'user', parts });
       } else {
-          for (let m of chatHistory) {
-             contents.push({ role: m.role, parts: [{ text: m.text }] });
+          for (let i = 0; i < chatHistory.length; i++) {
+             const m = chatHistory[i];
+             // Attach the file Data to the VERY FIRST user message in history
+             if (i === 0 && hasFile && m.role === 'user') {
+                contents.push({ role: m.role, parts: [{ fileData: { fileUri, mimeType: fileMime } }, { text: m.text }] });
+             } else {
+                contents.push({ role: m.role, parts: [{ text: m.text }] });
+             }
           }
       }
 
@@ -80,7 +101,7 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents,
-          systemInstruction,
+          systemInstruction: finalSystemInstruction,
         }),
       });
 

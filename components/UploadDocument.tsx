@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Upload, BookOpen, FileText } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, BookOpen, FileText, Loader2, File as FileIcon, X } from 'lucide-react';
 import { AppMode } from '../App';
 
 interface UploadDocumentProps {
@@ -9,10 +9,40 @@ interface UploadDocumentProps {
 export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   const [content, setContent] = useState('');
   const [mode, setMode] = useState<AppMode>('LEARN_BOOK');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStart = () => {
     if (!content.trim()) return;
     onStart(content, mode);
+  };
+
+  const selectedFileName = content.startsWith('FILE_URI::') ? content.split('::')[3] : null;
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/gemini/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      
+      const data = await res.json();
+      setContent(`FILE_URI::${data.fileUri}::${data.mimeType}::${data.name}`);
+    } catch (err) {
+      console.error(err);
+      alert('Tải lên tệp thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -23,23 +53,75 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
             AI Gia sư Cá nhân của bạn
           </h1>
           <p className="text-lg text-slate-600 mb-2">
-            Copy nội dung bài học, đoạn văn bản từ Sách Giáo Khoa hoặc Đề thi và dán vào bên dưới.
-          </p>
-          <p className="text-md text-slate-500">
-            Hệ thống hỗ trợ dạng văn bản (text). Bạn hãy bôi đen nội dung trong PDF/Word, nhấn Copy (Ctrl+C) và Paste (Ctrl+V) vào khung dưới đây.
+            Tải lên tệp PDF, Sách Giáo Khoa hoặc copy dán văn bản để bắt đầu.
           </p>
         </div>
 
         <div className="w-full bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden text-left p-8">
-          <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">
-            Nội dung bài học / Đề thi
-          </label>
-          <textarea
-            className="w-full h-48 sm:h-64 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition resize-y mb-8 font-mono text-sm leading-relaxed"
-            placeholder="Ví dụ: Copy một bài Reading tiếng Anh lớp 10 và dán vào đây..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
+          
+          <div className="mb-8">
+            <label className="block text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wider">
+              Nội dung bài học / Đề thi
+            </label>
+
+            {selectedFileName ? (
+              <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-teal-100 rounded-lg text-teal-600">
+                    <FileIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800">{selectedFileName}</h4>
+                    <p className="text-sm text-teal-600">Đã tải lên hệ thống</p>
+                  </div>
+                </div>
+                <button onClick={() => setContent('')} className="p-2 text-slate-400 hover:text-red-500 transition">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                 <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center hover:bg-slate-50 hover:border-teal-400 transition cursor-pointer"
+                 >
+                   {isUploading ? (
+                     <div className="flex flex-col items-center text-teal-600">
+                        <Loader2 className="w-10 h-10 animate-spin mb-3" />
+                        <span className="font-medium">Đang tải lên và xử lý...</span>
+                     </div>
+                   ) : (
+                     <div className="flex flex-col items-center text-slate-500">
+                        <Upload className="w-10 h-10 mb-3 text-slate-400" />
+                        <span className="font-medium text-slate-700 mb-1">Click để tải lên tệp</span>
+                        <span className="text-sm">Hỗ trợ PDF, Word, Ảnh... (Tối đa 50MB)</span>
+                     </div>
+                   )}
+                 </button>
+                 <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   onChange={handleFileUpload}
+                   className="hidden" 
+                   accept="application/pdf,image/*,.doc,.docx,text/plain" 
+                 />
+
+                 <div className="flex items-center gap-4 text-slate-400">
+                    <div className="flex-1 h-px bg-slate-200"></div>
+                    <span className="text-sm font-medium">Hoặc Dán Văn Bản</span>
+                    <div className="flex-1 h-px bg-slate-200"></div>
+                 </div>
+
+                 <textarea
+                  className="w-full h-32 sm:h-48 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition resize-y font-mono text-sm leading-relaxed"
+                  placeholder="Ví dụ: Copy một bài Reading tiếng Anh lớp 10 và dán vào đây..."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                 />
+              </div>
+            )}
+          </div>
 
           <label className="block text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wider">
             Chế độ học
@@ -83,7 +165,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
           <div className="flex justify-center">
             <button
               onClick={handleStart}
-              disabled={!content.trim()}
+              disabled={!content.trim() || isUploading}
               className="bg-slate-900 text-white rounded-full px-10 py-4 font-semibold text-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition transform hover:scale-105 active:scale-95 shadow-xl shadow-slate-900/20"
             >
               Bắt đầu học ngay

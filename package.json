@@ -13,11 +13,13 @@
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@supabase/supabase-js": "^2.95.3",
+    "@types/multer": "^2.1.0",
     "clsx": "^2.1.1",
     "express": "^5.2.1",
     "firebase": "^12.13.0",
     "lucide-react": "^0.563.0",
     "motion": "^12.38.0",
+    "multer": "^2.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
