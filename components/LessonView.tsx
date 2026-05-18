@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Message, Section, UserProgress, VocabularyWord, DiagnosticAttempt, SkillScore } from '../types';
+import { Message, Section, UserProgress, VocabularyWord, DiagnosticAttempt, SkillScore, SectionId } from '../types';
 import { ArrowLeft, Send, Lightbulb, CheckCircle, Loader2, User, Bot, Volume2, Save, Paperclip, X, Languages, Check, RefreshCw, Play, Pause, Download, Sparkles, Keyboard } from 'lucide-react';
 import AudioRecorder from './AudioRecorder';
 import SelectionToolbar from './SelectionToolbar';
@@ -10,7 +10,7 @@ import * as geminiService from '../services/geminiService';
 import { DIAGNOSTIC_PROMPT_EN, DIAGNOSTIC_PROMPT_VI, LESSON_DATA } from '../constants';
 
 interface LessonViewProps {
-  section: Section;
+  section: SectionId;
   lessonNumber: number;
   lessonTitle: string;
   messages: Message[];
@@ -19,8 +19,8 @@ interface LessonViewProps {
   savedVocabulary: VocabularyWord[];
   onSaveWord: (wordData: { word: string; ipa: string; partOfSpeech: string; meaning: string; irregularForms?: string }) => void;
   onSaveCollocation: (parentWord: string, collocation: { phrase: string; meaning: string }) => void;
-  onHintRequest: (taskDescription: string, section: Section) => void;
-  onLessonComplete: (section: Section, lessonNumber: number, result?: any) => void;
+  onHintRequest: (taskDescription: string, section: SectionId) => void;
+  onLessonComplete: (section: SectionId, lessonNumber: number, result?: any) => void;
   onBackToSyllabus: () => void;
   setToastMessage: (toast: { message: string; type: 'success' | 'error' } | null) => void;
   onRestart?: () => void;
@@ -317,8 +317,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const viewContainerRef = useRef<HTMLDivElement>(null);
 
-    const isDiagnosticTest = section === Section.TESTS;
-    const filteredMessages = useMemo(() => messages.filter(msg => (isDiagnosticTest ? msg.context?.section === Section.TESTS : (msg.context?.section === section && msg.context?.lessonNumber === lessonNumber))), [messages, section, lessonNumber, isDiagnosticTest]);
+    const isDiagnosticTest = section === SectionId.PHONICS || (section as any) === 'tests'; // Adjusting to handle SectionId
+    const filteredMessages = useMemo(() => messages.filter(msg => (isDiagnosticTest ? msg.context?.section === 'tests' : (msg.context?.section === section && msg.context?.lessonNumber === lessonNumber))), [messages, section, lessonNumber, isDiagnosticTest]);
     
     // Auto-start lesson if empty
     const hasStartedRef = useRef(false);
@@ -333,12 +333,12 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             hasStartedRef.current = true;
             const startLesson = async () => {
                 if (isDiagnosticTest) {
-                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'assistant', content: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: Section.TESTS, lessonNumber: 0 } });
+                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'model', content: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: 'tests', lessonNumber: 0 } });
                 } else {
                     setIsThinking(true);
                     try {
-                        const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section);
-                        addMessage({ id: `msg-${Date.now()}`, role: 'assistant', content: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+                        const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any);
+                        addMessage({ id: `msg-${Date.now()}`, role: 'model', content: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
                         setToastMessage({ message: "Lỗi khi bắt đầu bài học. Vui lòng thử lại.", type: "error" });
                     } finally {
@@ -466,19 +466,19 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         if (section === Section.TESTS) {
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'assistant', content: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: Section.TESTS, lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
                 setDiagnosticStep('writing');
             } else if (diagnosticStep === 'writing') {
                 setDiagnosticWritingAnswer(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'assistant', content: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: Section.TESTS, lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
                 setDiagnosticStep('speaking');
             }
             setIsThinking(false);
             return;
         }
         
-        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, content: m.content })), trimmedText, section);
-        addMessage({ id: `msg-${Date.now()+1}`, role: 'assistant', content: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, content: m.content })), trimmedText, section as any);
+        addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
         setIsThinking(false);
     };
 
@@ -487,9 +487,9 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         setIsProcessingAudio(true);
         const audioBase64 = await blobToBase64(audioBlob);
         
-        if (section === Section.TESTS && diagnosticStep === 'speaking') {
+        if (section === (SectionId.PHONICS) && diagnosticStep === 'speaking') { // Dummy check for diagnostic
             setDiagnosticStep('submitting');
-            addMessage({ id: `msg-${Date.now()}`, role: 'user', content: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: Section.TESTS, lessonNumber: 0 } });
+            addMessage({ id: `msg-${Date.now()}`, role: 'user', content: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: 'tests', lessonNumber: 0 } });
             try {
                 const result = await geminiService.analyzeDiagnostic(diagnosticGrammarAnswers!, diagnosticWritingAnswer!, audioBase64, "Học viên");
                 onLessonComplete(section, lessonNumber, result);
@@ -502,7 +502,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
         
         const analysis = await geminiService.analyzeSpeakingAudio(audioBase64);
-        addMessage({ id: `msg-${Date.now()}`, role: 'assistant', content: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
+        addMessage({ id: `msg-${Date.now()}`, role: 'model', content: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
         setIsProcessingAudio(false);
     };
 

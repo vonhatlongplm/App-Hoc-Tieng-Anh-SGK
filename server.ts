@@ -1,13 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 import multer from "multer";
+import { GEMINI_MODEL } from "./constants";
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: GoogleGenAI | null = null;
 let fileManager: GoogleAIFileManager | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
@@ -16,7 +17,14 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenerativeAI(key);
+    genAI = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return genAI;
 };
@@ -74,17 +82,16 @@ async function startServer() {
     try {
       const { contents, systemInstruction } = req.body;
       
-      const genAI = getGenAI();
-      const model = genAI.getGenerativeModel({
-        model: "gemini-3.1-pro-preview",
-        systemInstruction,
+      const ai = getGenAI();
+      const result = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents,
+        config: {
+          systemInstruction,
+        }
       });
 
-      const result = await model.generateContent({
-          contents
-      });
-
-      res.json({ text: result.response.text() });
+      res.json({ text: result.text });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });

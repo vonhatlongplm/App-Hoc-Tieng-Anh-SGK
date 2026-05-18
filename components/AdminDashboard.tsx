@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { StudentProfile as StudentProfileData } from '../services/storageService';
 import { Loader2, Users, ArrowLeft, BookOpen, Star, Lightbulb, RefreshCw, MessageSquareWarning, ChevronRight } from 'lucide-react';
-import { Section, LessonProgress, UserProgress, VocabularyWord, CorrectionEntry } from '../types';
+import { Section, LessonProgress, UserProgress, VocabularyWord, CorrectionEntry, SectionId } from '../types';
 import { createInitialDetailedProgress } from '../constants';
 import { supabase } from '../services/supabaseClient';
 
@@ -21,20 +21,21 @@ export interface ProcessedStudentProfile {
 }
 
 
-const SkillProgressCard: React.FC<{ section: Section, progress: ProcessedStudentProfile['detailedProgress'], totalLessons: number }> = ({ section, progress, totalLessons }) => {
+const SkillProgressCard: React.FC<{ section: SectionId, progress: ProcessedStudentProfile['detailedProgress'], totalLessons: number }> = ({ section, progress, totalLessons }) => {
     const sectionProgress = progress[section];
     if (!sectionProgress) return null;
 
-    const percentage = Math.round((sectionProgress.completedLessons.length / totalLessons) * 100);
+    const completedCount = Array.isArray(sectionProgress.completedLessons) ? sectionProgress.completedLessons.length : 0;
+    const percentage = Math.round((completedCount / totalLessons) * 100);
     const color = percentage > 66 ? 'bg-green-500' : percentage > 33 ? 'bg-blue-500' : 'bg-amber-500';
 
     return (
         <div className="bg-slate-50 p-4 rounded-lg">
-            <h5 className="font-bold text-slate-800">{section}</h5>
+            <h5 className="font-bold text-slate-800 uppercase">{section}</h5>
             <p className="text-sm text-slate-500 mb-2">Bài học gần nhất: <span className="font-semibold text-teal-700">{sectionProgress.currentLesson}</span></p>
             <div className="flex justify-between mb-1">
                 <span className="text-sm font-medium text-slate-700">Tiến độ</span>
-                <span className="text-sm font-medium text-slate-500">{sectionProgress.completedLessons.length}/{totalLessons} ({percentage}%)</span>
+                <span className="text-sm font-medium text-slate-500">{completedCount}/{totalLessons} ({percentage}%)</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2.5">
                 <div className={`${color} h-2.5 rounded-full`} style={{ width: `${percentage}%` }}></div>
@@ -44,7 +45,7 @@ const SkillProgressCard: React.FC<{ section: Section, progress: ProcessedStudent
 };
 
 const StudentDetailView: React.FC<{ profile: ProcessedStudentProfile, onBack: () => void }> = ({ profile, onBack }) => {
-    const sectionsWithLessons = [Section.GRAMMAR, Section.VOCABULARY, Section.LISTENING, Section.READING, Section.WRITING, Section.SPEAKING];
+    const sectionsWithLessons = [SectionId.GRAMMAR, SectionId.VOCAB, SectionId.LISTENING, SectionId.READING, SectionId.WRITING, SectionId.SPEAKING];
 
     return (
         <div className="p-6 animate-in fade-in duration-300 h-full overflow-y-auto">
@@ -81,7 +82,9 @@ const StudentDetailView: React.FC<{ profile: ProcessedStudentProfile, onBack: ()
                                 {profile.errorLog.map(log => (
                                     <div key={log.id} className="p-4 rounded-lg bg-slate-50 border border-slate-200">
                                         <div className="flex justify-between mb-2">
-                                            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">{log.section}</span>
+                                            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">
+                                                {typeof log.section === 'string' ? log.section : (log.section as any)?.title || 'N/A'}
+                                            </span>
                                             <span className="text-xs text-slate-400">{new Date(log.timestamp).toLocaleDateString('vi-VN')}</span>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -260,7 +263,7 @@ const AdminDashboard: React.FC = () => {
                                             {profile.level}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap align-top text-center"><div className="text-sm text-slate-900 font-semibold">{totalCompleted}</div></td>
+                                    <td className="px-6 py-4 whitespace-nowrap align-top text-center"><div className="text-sm text-slate-900 font-semibold">{(totalCompleted as any)}</div></td>
                                     <td className="px-6 py-4 whitespace-nowrap align-top text-center"><div className="text-sm text-red-600 font-bold">{profile.errorLog.length}</div></td>
                                     <td className="px-6 py-4 whitespace-nowrap align-top text-right">
                                         <button onClick={() => setSelectedProfile(profile)} className="text-teal-600 hover:text-teal-900 text-sm font-bold flex items-center justify-end gap-1 ml-auto">

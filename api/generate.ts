@@ -1,14 +1,22 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+import { GEMINI_MODEL } from "../constants";
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: GoogleGenAI | null = null;
 
 const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new Error("GEMINI_API_KEY is not set. Please set it in your environment variables (e.g., Vercel Dashboard).");
+      throw new Error("GEMINI_API_KEY is not set.");
     }
-    genAI = new GoogleGenerativeAI(key);
+    genAI = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return genAI;
 };
@@ -33,17 +41,19 @@ export default async function handler(req: any, res: any) {
   try {
     const { contents, systemInstruction } = req.body;
     
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.1-pro-preview",
-      systemInstruction,
+    // Convert contents to match @google/genai expectations if needed
+    // contents usually is [{ role: 'user', parts: [{ text: '...' }] }]
+    
+    const ai = getGenAI();
+    const result = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents,
+      config: {
+        systemInstruction,
+      }
     });
 
-    const result = await model.generateContent({
-      contents
-    });
-
-    res.status(200).json({ text: result.response.text() });
+    res.status(200).json({ text: result.text });
   } catch (err: any) {
     console.error("Vercel Generate Error:", err);
     res.status(500).json({ error: err.message || "Generation failed" });

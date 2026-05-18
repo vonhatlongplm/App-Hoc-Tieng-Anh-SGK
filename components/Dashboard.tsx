@@ -1,11 +1,11 @@
 import React from 'react';
-import { UserProgress, Section } from '../types';
+import { UserProgress, Section, SectionId } from '../types';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Clock, Award, Lock, Target, ArrowRight, Lightbulb } from 'lucide-react';
 
 interface DashboardProps {
   progress: UserProgress;
-  onStartLesson: (section: Section) => void;
+  onStartLesson: (section: SectionId) => void;
 }
 
 const RoadmapStage: React.FC<{ title: string, description: string, status: 'recommended' | 'locked', onClick: () => void }> = ({ title, description, status, onClick }) => {
@@ -37,9 +37,9 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
 
   const renderRoadmap = () => {
     const stages = [
-        { id: 'grammar', title: 'Giai đoạn 1: Nền tảng Ngữ pháp & Từ vựng', description: 'Xây dựng nền tảng B2 vững chắc.', unlockedFor: ['A2', 'B1', 'B2', 'C'], section: Section.GRAMMAR },
-        { id: 'receptive', title: 'Giai đoạn 2: Kỹ năng Tiếp thu', description: 'Luyện tập Đọc và Nghe chuyên sâu.', unlockedFor: ['B1', 'B2', 'C'], section: Section.READING },
-        { id: 'productive', title: 'Giai đoạn 3: Kỹ năng Sản sinh', description: 'Tập trung vào Viết và Nói nâng cao.', unlockedFor: ['B2', 'C'], section: Section.WRITING }
+        { id: 'grammar', title: 'Giai đoạn 1: Nền tảng Ngữ pháp & Từ vựng', description: 'Xây xây dựng nền tảng B2 vững chắc.', unlockedFor: ['A2', 'B1', 'B2', 'C'], section: SectionId.GRAMMAR },
+        { id: 'receptive', title: 'Giai đoạn 2: Kỹ năng Tiếp thu', description: 'Luyện tập Đọc và Nghe chuyên sâu.', unlockedFor: ['B1', 'B2', 'C'], section: SectionId.READING },
+        { id: 'productive', title: 'Giai đoạn 3: Kỹ năng Sản sinh', description: 'Tập trung vào Viết và Nói nâng cao.', unlockedFor: ['B2', 'C'], section: SectionId.WRITING }
     ];
     
     return stages.map(stage => {
@@ -62,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
           <h3 className="text-lg font-semibold mb-4 text-slate-700">Radar Kỹ năng</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={progress.scores}>
+              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={Object.entries(progress.scores || {}).map(([skill, score]) => ({ skill, score }))}>
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="skill" tick={{ fill: '#475569', fontSize: 12 }} />
                 <PolarRadiusAxis angle={30} domain={[0, 50]} tick={false} />
@@ -97,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
                  <div className="p-4 mb-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm flex items-start gap-3">
                     <Lightbulb className="flex-shrink-0 text-amber-500 mt-0.5" />
                     <div>
-                        <span className="font-bold">Gợi ý từ giáo viên:</span> Lộ trình của bạn hiện đang mở. Hãy làm <button onClick={() => onStartLesson(Section.TESTS)} className="font-bold underline hover:text-amber-700">Bài kiểm tra đầu vào</button> để thầy/cô có thể cá nhân hóa các giai đoạn học tập phù hợp nhất với năng lực của em nhé.
+                        <span className="font-bold">Gợi ý từ giáo viên:</span> Lộ trình của bạn hiện đang mở. Hãy làm để thầy/cô có thể cá nhân hóa các giai đoạn học tập phù hợp nhất với năng lực của em nhé.
                     </div>
                 </div>
             )}

@@ -4,10 +4,15 @@ export type AppMode = 'LEARN_BOOK' | 'PRACTICE_EXAM';
 export interface Message {
   id: string;
   role: 'user' | 'model';
-  text: string;
+  content: string;
   translation?: string;
   showTranslation?: boolean;
-  context?: string;
+  context?: any;
+  type?: 'text' | 'audio_feedback';
+  timestamp?: number;
+  imageUrls?: string[];
+  audioBase64?: string;
+  englishAudio?: string;
 }
 
 export interface UserProgress {
@@ -26,10 +31,20 @@ export interface UserProgress {
   detailedProgress?: any;
 }
 
+export enum SectionId {
+  VOCAB = 'vocab',
+  GRAMMAR = 'grammar',
+  READING = 'reading',
+  LISTENING = 'listening',
+  SPEAKING = 'speaking',
+  WRITING = 'writing',
+  PHONICS = 'phonics'
+}
+
 export interface Section {
-  id: string;
+  id: SectionId;
   title: string;
-  type: 'vocab' | 'grammar' | 'reading' | 'listening' | 'speaking' | 'writing' | 'phonics';
+  type: SectionId;
   content?: string;
 }
 
@@ -87,6 +102,9 @@ export interface LessonHistoryEntry {
   lessonId: string;
   score: number;
   date: string;
+  completedOn?: number;
+  section?: string | Section;
+  details?: string;
 }
 
 export interface SkillScore {
