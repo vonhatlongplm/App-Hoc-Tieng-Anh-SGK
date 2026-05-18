@@ -14,6 +14,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [textInput, setTextInput] = useState('');
   const [mode, setMode] = useState<AppMode>('LEARN_BOOK');
+  const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,10 +33,21 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    if (items.length + files.length > 20) {
+      alert("Bạn chỉ có thể tải lên tối đa 20 mục cùng lúc.");
+      return;
+    }
+
     setIsUploading(true);
 
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
+      const results: UploadItem[] = [];
+      const fileArray = Array.from(files);
+      
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        setUploadStatus(`Đang tải tệp ${i + 1}/${fileArray.length}: ${file.name}...`);
+        
         const formData = new FormData();
         formData.append('file', file);
 
@@ -51,14 +63,18 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
             const js = JSON.parse(responseText);
             errMsg = js.error || JSON.stringify(js);
           } catch(e) {}
-          throw new Error(`Lỗi tải tệp ${file.name}: ${errMsg}`);
+          
+          if (res.status === 413) {
+            errMsg = "Tệp quá lớn. Nếu bạn đang dùng bản deploy trên Vercel, giới hạn là 4.5MB. Hãy dùng bản preview trong AI Studio hoặc chia nhỏ tệp hơn.";
+          }
+          
+          throw new Error(`Lỗi tải tệp ${file.name} (Status ${res.status}): ${errMsg}`);
         }
         
         const data = JSON.parse(responseText);
-        return { type: 'file' as const, uri: data.fileUri, mime: data.mimeType, name: data.name };
-      });
+        results.push({ type: 'file' as const, uri: data.fileUri, mime: data.mimeType, name: data.name });
+      }
 
-      const results = await Promise.all(uploadPromises);
       setItems(prev => [...prev, ...results]);
     } catch (err: any) {
       console.error(err);
@@ -132,13 +148,14 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
             <div className="space-y-4">
                <button 
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || items.length >= 5}
+                disabled={isUploading || items.length >= 20}
                 className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center hover:bg-slate-50 hover:border-teal-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  {isUploading ? (
                    <div className="flex flex-col items-center text-teal-600">
                       <Loader2 className="w-10 h-10 animate-spin mb-3" />
-                      <span className="font-medium">Đang tải lên và xử lý...</span>
+                      <span className="font-medium">{uploadStatus || 'Đang tải lên và xử lý...'}</span>
+                      <p className="text-xs mt-2 text-slate-400">Vui lòng giữ trình duyệt mở</p>
                    </div>
                  ) : (
                    <div className="flex flex-col items-center text-slate-500">

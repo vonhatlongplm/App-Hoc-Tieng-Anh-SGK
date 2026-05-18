@@ -24,16 +24,20 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: "250mb" }));
-  app.use(express.urlencoded({ limit: "250mb", extended: true }));
+  app.use(express.json({ limit: "500mb" }));
+  app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
-  app.post("/api/gemini/upload", upload.single("file"), async (req, res) => {
+  app.post("/api/gemini/upload", (req, res, next) => {
+    console.log(`Incoming upload request: ${req.headers['content-length']} bytes`);
+    next();
+  }, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
+        console.error("No file in request body");
         return res.status(400).json({ error: "No file uploaded" });
       }
       
-      // Sanitize display name for Google GenAI Files API
+      console.log(`Processing file: ${req.file.originalname} (${req.file.size} bytes)`);
       // Usually it prefers alphanumeric, dots, dashes, underscores
       let safeName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       if (!safeName || safeName.length < 3) safeName = `file_${Date.now()}`;
