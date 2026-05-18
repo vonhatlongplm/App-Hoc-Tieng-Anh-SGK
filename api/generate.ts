@@ -1,6 +1,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+let genAI: GoogleGenerativeAI | null = null;
+
+const getGenAI = () => {
+  if (!genAI) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error("GEMINI_API_KEY is not set. Please set it in your environment variables (e.g., Vercel Dashboard).");
+    }
+    genAI = new GoogleGenerativeAI(key);
+  }
+  return genAI;
+};
 
 export const config = {
   api: {
@@ -22,6 +33,7 @@ export default async function handler(req: any, res: any) {
   try {
     const { contents, systemInstruction } = req.body;
     
+    const genAI = getGenAI();
     const model = genAI.getGenerativeModel({
       model: "gemini-3.1-pro-preview",
       systemInstruction,

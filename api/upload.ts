@@ -3,7 +3,18 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!);
+let fileManager: GoogleAIFileManager | null = null;
+
+const getFileManager = () => {
+  if (!fileManager) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error("GEMINI_API_KEY is not set. Please set it in your environment variables (e.g., Vercel Dashboard).");
+    }
+    fileManager = new GoogleAIFileManager(key);
+  }
+  return fileManager;
+};
 
 export const config = {
   api: {
@@ -32,6 +43,7 @@ export default async function handler(req: any, res: any) {
     
     fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
 
+    const fileManager = getFileManager();
     const uploadResult = await fileManager.uploadFile(tmpFilePath, {
       mimeType: mimeType || 'application/pdf',
       displayName: safeName.slice(0, 40),

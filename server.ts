@@ -6,8 +6,26 @@ import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!);
+let genAI: GoogleGenerativeAI | null = null;
+let fileManager: GoogleAIFileManager | null = null;
+
+const getGenAI = () => {
+  if (!genAI) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY is missing");
+    genAI = new GoogleGenerativeAI(key);
+  }
+  return genAI;
+};
+
+const getFileManager = () => {
+  if (!fileManager) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("GEMINI_API_KEY is missing");
+    fileManager = new GoogleAIFileManager(key);
+  }
+  return fileManager;
+};
 
 async function startServer() {
   const app = express();
@@ -27,6 +45,7 @@ async function startServer() {
       const tmpFilePath = path.join(os.tmpdir(), `upload_${Date.now()}_${safeName}`);
       fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
 
+      const fileManager = getFileManager();
       const uploadResult = await fileManager.uploadFile(tmpFilePath, {
         mimeType: mimeType || 'application/pdf',
         displayName: safeName.slice(0, 40),
@@ -54,6 +73,7 @@ async function startServer() {
     try {
       const { contents, systemInstruction } = req.body;
       
+      const genAI = getGenAI();
       const model = genAI.getGenerativeModel({
         model: "gemini-3.1-pro-preview",
         systemInstruction,
