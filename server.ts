@@ -5,9 +5,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
+import multer from "multer";
 
 let genAI: GoogleGenerativeAI | null = null;
 let fileManager: GoogleAIFileManager | null = null;
+
+const upload = multer({ dest: os.tmpdir() });
 
 const getGenAI = () => {
   if (!genAI) {
@@ -34,34 +37,32 @@ async function startServer() {
   app.use(express.json({ limit: "500mb" }));
   app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
-  app.post("/api/upload", async (req, res) => {
+  app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
-      const { base64, mimeType, name } = req.body;
-      if (!base64) {
+      const file = req.file;
+      const { name, mimeType } = req.body;
+
+      if (!file) {
         return res.status(400).json({ error: "No file content" });
       }
       
-      const safeName = (name || 'upload').replace(/[^a-zA-Z0-9.-]/g, '_');
-      const tmpFilePath = path.join(os.tmpdir(), `upload_${Date.now()}_${safeName}`);
-      fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
-
       const fileManager = getFileManager();
-      const uploadResult = await fileManager.uploadFile(tmpFilePath, {
-        mimeType: mimeType || 'application/pdf',
-        displayName: safeName.slice(0, 40),
+      const uploadResult = await fileManager.uploadFile(file.path, {
+        mimeType: mimeType || file.mimetype || 'application/pdf',
+        displayName: (name || file.originalname || 'upload').slice(0, 40),
       });
       
-      const { file } = uploadResult;
+      const { file: uploadedFile } = uploadResult;
       
       // Cleanup temp file
-      if (fs.existsSync(tmpFilePath)) {
-          fs.unlinkSync(tmpFilePath);
+      if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
       }
       
       res.json({
-        fileUri: file.uri,
-        mimeType: file.mimeType || mimeType,
-        name
+        fileUri: uploadedFile.uri,
+        mimeType: uploadedFile.mimeType || mimeType,
+        name: name || file.originalname
       });
     } catch (err: any) {
       console.error("Upload error:", err);

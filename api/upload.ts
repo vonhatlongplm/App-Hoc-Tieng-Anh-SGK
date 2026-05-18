@@ -2,8 +2,23 @@ import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import multer from "multer";
 
 let fileManager: GoogleAIFileManager | null = null;
+
+const upload = multer({ dest: os.tmpdir() });
+
+// Helper to run middleware
+function runMiddleware(req: any, res: any, fn: any) {
+  return new Promise((resolve, reject) => {
+    fn(req, res, (result: any) => {
+      if (result instanceof Error) {
+        return reject(result);
+      }
+      return resolve(result);
+    });
+  });
+}
 
 const getFileManager = () => {
   if (!fileManager) {
@@ -18,9 +33,7 @@ const getFileManager = () => {
 
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
+    bodyParser: false,
   },
 };
 
@@ -34,29 +47,28 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { base64, mimeType, name } = req.body;
-    if (!base64) return res.status(400).json({ error: "No file content" });
+    // Run multer middleware
+    await runMiddleware(req, res, upload.single('file'));
     
-    // Sanitize the file name
-    const safeName = (name || 'upload').replace(/[^a-zA-Z0-9.-]/g, '_');
-    const tmpFilePath = path.join(os.tmpdir(), `up_${Date.now()}_${safeName.slice(-20)}`);
+    const file = req.file;
+    const { name, mimeType } = req.body;
     
-    fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
-
+    if (!file) return res.status(400).json({ error: "No file content" });
+    
     const fileManager = getFileManager();
-    const uploadResult = await fileManager.uploadFile(tmpFilePath, {
-      mimeType: mimeType || 'application/pdf',
-      displayName: safeName.slice(0, 40),
+    const uploadResult = await fileManager.uploadFile(file.path, {
+      mimeType: mimeType || file.mimetype || 'application/pdf',
+      displayName: (name || file.originalname || 'upload').slice(0, 40),
     });
     
-    const { file } = uploadResult;
+    const { file: uploadedFile } = uploadResult;
     
-    if (fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath);
+    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
     
     res.status(200).json({
-      fileUri: file.uri,
-      mimeType: file.mimeType || mimeType,
-      name
+      fileUri: uploadedFile.uri,
+      mimeType: uploadedFile.mimeType || mimeType,
+      name: name || file.originalname
     });
 
   } catch (err: any) {

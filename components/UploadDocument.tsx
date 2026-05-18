@@ -55,29 +55,18 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
           continue;
         }
 
-        setUploadStatus(`Đang xử lý ${i + 1}/${fileArray.length}: ${file.name}...`);
+        setUploadStatus(`Đang chuẩn bị ${i + 1}/${fileArray.length}: ${file.name}...`);
         
-        const base64Str = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            const base64 = result.split(',')[1];
-            resolve(base64);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name);
+        formData.append('mimeType', file.type);
 
         setUploadStatus(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
 
         const res = await fetch('/api/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: file.name,
-            mimeType: file.type,
-            base64: base64Str
-          }),
+          body: formData,
         });
 
         const responseText = await res.text();
