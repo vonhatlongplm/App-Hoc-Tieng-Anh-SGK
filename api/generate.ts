@@ -64,6 +64,9 @@ export default async function handler(req: any, res: any) {
     res.status(200).json({ text: result.text });
   } catch (err: any) {
     console.error("Vercel Generate Error:", err);
-    res.status(500).json({ error: err.message || "Generation failed" });
+    res.status(500).json({ 
+      error: err.message || "Generation failed",
+      stack: process.env.NODE_ENV !== "production" ? err.stack : undefined
+    });
   }
 }

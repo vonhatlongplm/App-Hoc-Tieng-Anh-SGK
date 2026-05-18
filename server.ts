@@ -101,8 +101,11 @@ async function startServer() {
 
       res.json({ text: result.text });
     } catch (err: any) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+      console.error("Generate Error Detail:", err);
+      res.status(500).json({ 
+        error: err.message,
+        stack: process.env.NODE_ENV !== "production" ? err.stack : undefined
+      });
     }
   });
 

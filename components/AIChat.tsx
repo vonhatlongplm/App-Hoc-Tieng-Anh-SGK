@@ -93,7 +93,7 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
         if (!docsAttached && m.role === 'user' && documentParts.length > 0) {
           contents.push({
             role: 'user',
-            parts: [...documentParts, { text: m.text }]
+            parts: [{ text: m.text }, ...documentParts]
           });
           docsAttached = true;
         } else {
