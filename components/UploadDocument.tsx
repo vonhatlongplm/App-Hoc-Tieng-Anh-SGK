@@ -46,14 +46,38 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
       
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
-        setUploadStatus(`Đang tải tệp ${i + 1}/${fileArray.length}: ${file.name}...`);
         
-        const formData = new FormData();
-        formData.append('file', file);
+        // Vercel limit is 4.5MB, Base64 adds ~33% overhead.
+        // Approx limit for raw file is ~3MB to be safe for Vercel.
+        // For AI Studio environment, it can be higher.
+        if (file.size > 20 * 1024 * 1024) {
+          alert(`Tệp ${file.name} quá lớn (tối đa 20MB).`);
+          continue;
+        }
+
+        setUploadStatus(`Đang xử lý ${i + 1}/${fileArray.length}: ${file.name}...`);
+        
+        const base64Str = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            const base64 = result.split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        setUploadStatus(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
 
         const res = await fetch('/api/gemini/upload', {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: file.name,
+            mimeType: file.type,
+            base64: base64Str
+          }),
         });
 
         const responseText = await res.text();
@@ -65,7 +89,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
           } catch(e) {}
           
           if (res.status === 413) {
-            errMsg = "Tệp quá lớn. Nếu bạn đang dùng bản deploy trên Vercel, giới hạn là 4.5MB. Hãy dùng bản preview trong AI Studio hoặc chia nhỏ tệp hơn.";
+            errMsg = "Tệp quá dung lượng cho phép của server (Gợi ý: Chia nhỏ tệp hoặc dùng tệp < 4MB if Vercel).";
           }
           
           throw new Error(`Lỗi tải tệp ${file.name} (Status ${res.status}): ${errMsg}`);

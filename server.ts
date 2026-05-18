@@ -1,24 +1,13 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
-import multer from "multer";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
-const upload = multer({ 
-  dest: os.tmpdir(),
-  limits: { fileSize: 200 * 1024 * 1024 } // 200MB limit for PDFs
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!);
 
 async function startServer() {
   const app = express();
@@ -27,38 +16,33 @@ async function startServer() {
   app.use(express.json({ limit: "500mb" }));
   app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
-  app.post("/api/gemini/upload", (req, res, next) => {
-    console.log(`Incoming upload request: ${req.headers['content-length']} bytes`);
-    next();
-  }, upload.single("file"), async (req, res) => {
+  app.post("/api/gemini/upload", async (req, res) => {
     try {
-      if (!req.file) {
-        console.error("No file in request body");
-        return res.status(400).json({ error: "No file uploaded" });
+      const { base64, mimeType, name } = req.body;
+      if (!base64) {
+        return res.status(400).json({ error: "No file content" });
       }
       
-      console.log(`Processing file: ${req.file.originalname} (${req.file.size} bytes)`);
-      // Usually it prefers alphanumeric, dots, dashes, underscores
-      let safeName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-      if (!safeName || safeName.length < 3) safeName = `file_${Date.now()}`;
+      const safeName = (name || 'upload').replace(/[^a-zA-Z0-9.-]/g, '_');
+      const tmpFilePath = path.join(os.tmpdir(), `upload_${Date.now()}_${safeName}`);
+      fs.writeFileSync(tmpFilePath, Buffer.from(base64, "base64"));
 
-      const file = await ai.files.upload({
-        file: req.file.path,
-        config: {
-          mimeType: req.file.mimetype,
-          displayName: safeName.slice(0, 40), // Limit length
-        }
+      const uploadResult = await fileManager.uploadFile(tmpFilePath, {
+        mimeType: mimeType || 'application/pdf',
+        displayName: safeName.slice(0, 40),
       });
       
+      const { file } = uploadResult;
+      
       // Cleanup temp file
-      if (fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
+      if (fs.existsSync(tmpFilePath)) {
+          fs.unlinkSync(tmpFilePath);
       }
       
       res.json({
         fileUri: file.uri,
-        mimeType: file.mimeType || req.file.mimetype,
-        name: req.file.originalname
+        mimeType: file.mimeType || mimeType,
+        name
       });
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -70,15 +54,16 @@ async function startServer() {
     try {
       const { contents, systemInstruction } = req.body;
       
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview", // Complex tutor tasks
-        contents,
-        config: {
-          systemInstruction,
-        }
+      const model = genAI.getGenerativeModel({
+        model: "gemini-3.1-pro-preview",
+        systemInstruction,
       });
 
-      res.json({ text: response.text });
+      const result = await model.generateContent({
+          contents
+      });
+
+      res.json({ text: result.response.text() });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
