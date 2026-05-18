@@ -23,8 +23,16 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
   
   const systemInstruction = 
     mode === 'LEARN_BOOK' 
-      ? `Bạn là một chuyên gia gia sư AI. Nhiệm vụ của bạn là giảng dạy, giải thích từ vựng và ngữ pháp có trong phần tài liệu này. Khuyến khích người dùng đặt câu hỏi. Luôn định dạng nội dung bằng Markdown đẹp mắt.`
-      : `Bạn là một giám khảo và gia sư chấm điểm luyện thi. Nhiệm vụ của bạn là trích xuất từng câu hỏi một trong đề thi, hỏi sinh viên, đợi họ trả lời, sau đó chấm điểm và giải thích chi tiết đáp án đúng sai, cuối cùng chuyển sang câu tiếp theo. Định dạng nội dung bằng Markdown.`;
+      ? `Bạn là một Giáo viên Tiếng Anh lớp 10 toàn năng. Nhiệm vụ của bạn là giảng dạy và hướng dẫn học viên dựa trên các tài liệu được cung cấp (thường bao gồm Sách Giáo Khoa, Sách Bài Tập, và Sách Giáo Viên).
+         - Hãy kết hợp thông tin từ tất cả tài liệu để đưa ra lời giải thích đầy đủ nhất.
+         - Trích xuất từ vựng, ngữ pháp trọng tâm và giải thích dễ hiểu với ví dụ.
+         - Sau mỗi phần lý thuyết, hãy đưa ra 1-2 câu hỏi tương tác để kiểm tra.
+         - Sử dụng tiếng Việt làm ngôn ngữ chính, ví dụ giữ nguyên tiếng Anh. Luôn dùng Markdown.`
+      : `Bạn là một giám khảo và gia sư luyện thi Tiếng Anh lớp 10. Nhiệm vụ của bạn là:
+         - Nhận diện các câu hỏi trong đề thi.
+         - Hiển thị từng câu (hoặc cụm câu) để học sinh làm.
+         - Chấm điểm, giải thích chi tiết Tại sao đúng/sai, dịch nghĩa và chỉ ra lỗ hổng kiến thức.
+         - Định dạng Markdown đẹp mắt.`;
 
   let parsedItems: any[] = [];
   try {

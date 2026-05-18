@@ -19,6 +19,13 @@ interface StudyLayoutProps {
 }
 
 export const StudyLayout: React.FC<StudyLayoutProps> = ({ documentContent, mode, messages, setMessages, onReset }) => {
+  let parsedItems: any[] = [];
+  try {
+    parsedItems = JSON.parse(documentContent);
+  } catch (e) {
+    parsedItems = [{ type: 'text', content: documentContent }];
+  }
+
   return (
     <div className="flex w-full h-full text-slate-900">
       {/* Left panel: Document Viewer */}
@@ -43,8 +50,31 @@ export const StudyLayout: React.FC<StudyLayoutProps> = ({ documentContent, mode,
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-3xl mx-auto font-serif text-lg leading-relaxed text-slate-800 break-words whitespace-pre-wrap">
-            {documentContent}
+          <div className="max-w-3xl mx-auto flex flex-col gap-6">
+            {parsedItems.map((item, index) => (
+              <div key={index} className="p-6 bg-slate-50 border border-slate-100 rounded-2xl">
+                {item.type === 'file' ? (
+                  <div className="flex flex-col gap-2">
+                     <div className="flex items-center gap-2 text-teal-600 font-semibold mb-2">
+                        <BookOpen className="w-5 h-5" />
+                        <span>TẬP TIN: {item.name}</span>
+                     </div>
+                     <p className="text-slate-500 italic text-sm">
+                       AI đang phân tích file này để hỗ trợ bạn. Nội dung file PDF/Ảnh được đọc trực tiếp bởi mô hình.
+                     </p>
+                  </div>
+                ) : (
+                  <div className="prose prose-slate max-w-none">
+                    <div className="flex items-center gap-2 text-slate-400 font-semibold mb-4 uppercase text-xs tracking-widest">
+                        <span>Đoạn văn bản tự nhập</span>
+                    </div>
+                    <div className="font-serif text-lg leading-relaxed text-slate-800 whitespace-pre-wrap">
+                      {item.content}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>

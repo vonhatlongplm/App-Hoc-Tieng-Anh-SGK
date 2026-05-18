@@ -29,32 +29,37 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setIsUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const res = await fetch('/api/gemini/upload', {
-        method: 'POST',
-        body: formData,
+        const res = await fetch('/api/gemini/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const responseText = await res.text();
+        if (!res.ok) {
+          let errMsg = responseText;
+          try {
+            const js = JSON.parse(responseText);
+            errMsg = js.error || JSON.stringify(js);
+          } catch(e) {}
+          throw new Error(`Lỗi tải tệp ${file.name}: ${errMsg}`);
+        }
+        
+        const data = JSON.parse(responseText);
+        return { type: 'file' as const, uri: data.fileUri, mime: data.mimeType, name: data.name };
       });
 
-      const responseText = await res.text();
-      if (!res.ok) {
-        let errMsg = responseText;
-        try {
-          const js = JSON.parse(responseText);
-          errMsg = js.error || JSON.stringify(js);
-        } catch(e) {}
-        throw new Error(errMsg);
-      }
-      
-      const data = JSON.parse(responseText);
-      setItems(prev => [...prev, { type: 'file', uri: data.fileUri, mime: data.mimeType, name: data.name }]);
+      const results = await Promise.all(uploadPromises);
+      setItems(prev => [...prev, ...results]);
     } catch (err: any) {
       console.error(err);
       alert(`Tải lên tệp thất bại: ${err.message || 'Vui lòng thử lại'}`);
@@ -138,8 +143,8 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
                  ) : (
                    <div className="flex flex-col items-center text-slate-500">
                       <Upload className="w-10 h-10 mb-3 text-slate-400" />
-                      <span className="font-medium text-slate-700 mb-1">Click để tải lên tệp (Sách GK, Sách BT...)</span>
-                      <span className="text-sm">Hỗ trợ PDF, Word, Ảnh... (Tối đa 50MB)</span>
+                      <span className="font-medium text-slate-700 mb-1">Click để tải lên (Có thể chọn nhiều tệp)</span>
+                      <span className="text-sm">Hỗ trợ PDF, Word, Ảnh... Sách GK, Sách BT, Sách GV...</span>
                    </div>
                  )}
                </button>
@@ -149,6 +154,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
                  onChange={handleFileUpload}
                  className="hidden" 
                  accept="application/pdf,image/*,.doc,.docx,text/plain" 
+                 multiple
                />
 
                <div className="flex items-center gap-4 text-slate-400">

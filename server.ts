@@ -15,7 +15,10 @@ const ai = new GoogleGenAI({
   }
 });
 
-const upload = multer({ dest: os.tmpdir() });
+const upload = multer({ 
+  dest: os.tmpdir(),
+  limits: { fileSize: 200 * 1024 * 1024 } // 200MB limit for PDFs
+});
 
 async function startServer() {
   const app = express();
@@ -30,16 +33,23 @@ async function startServer() {
         return res.status(400).json({ error: "No file uploaded" });
       }
       
+      // Sanitize display name for Google GenAI Files API
+      // Usually it prefers alphanumeric, dots, dashes, underscores
+      let safeName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      if (!safeName || safeName.length < 3) safeName = `file_${Date.now()}`;
+
       const file = await ai.files.upload({
         file: req.file.path,
         config: {
           mimeType: req.file.mimetype,
-          displayName: req.file.originalname,
+          displayName: safeName.slice(0, 40), // Limit length
         }
       });
       
       // Cleanup temp file
-      fs.unlinkSync(req.file.path);
+      if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+      }
       
       res.json({
         fileUri: file.uri,
@@ -47,8 +57,8 @@ async function startServer() {
         name: req.file.originalname
       });
     } catch (err: any) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+      console.error("Upload error:", err);
+      res.status(500).json({ error: err.message || "Unknown upload error" });
     }
   });
 
