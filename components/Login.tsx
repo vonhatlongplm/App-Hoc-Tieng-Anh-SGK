@@ -7,12 +7,17 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) {
+      setError('Vui lòng nhập tên của bạn.');
+      return;
+    }
     if (!email.trim() || !email.includes('@')) {
       setError('Vui lòng nhập một email hợp lệ.');
       return;
@@ -21,7 +26,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       setLoading(true);
       setError('');
-      const user = await simpleEmailLogin(email.trim());
+      const user = await simpleEmailLogin(email.trim(), name.trim());
       onLogin(user);
     } catch (err: any) {
       console.error(err);
@@ -40,11 +45,28 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">Omni English Tutor</h2>
-        <p className="text-slate-600 mb-8">Đăng nhập bằng email để lưu trữ tiến trình học tập của bạn trên hệ thống.</p>
+        <p className="text-slate-600 mb-8">Đăng nhập bằng thông tin học viên để lưu trữ tiến trình học tập của bạn trên hệ thống.</p>
 
         {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-6 text-left">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Tên học viên</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                required
+                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition outline-none"
+                placeholder="Nguyễn Văn A"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Email học viên</label>
             <div className="relative">

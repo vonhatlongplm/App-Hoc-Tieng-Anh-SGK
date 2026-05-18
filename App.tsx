@@ -52,6 +52,7 @@ const App: React.FC = () => {
       saveProgressToFirebase(
         currentUser.uid,
         currentUser.email,
+        currentUser.name,
         documentContent,
         appMode,
         messages
@@ -83,7 +84,7 @@ const App: React.FC = () => {
 
   const handleStartOver = async () => {
     if (currentUser?.uid) {
-      await clearProgressFromFirebase(currentUser.uid, currentUser.email);
+      await clearProgressFromFirebase(currentUser.uid, currentUser.email, currentUser.name);
     }
     setDocumentContent('');
     setMessages([]);

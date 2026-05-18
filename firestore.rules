@@ -6,10 +6,11 @@ service cloud.firestore {
     }
 
     function isValidProgress(data) {
-      return data.keys().hasAll(['uid', 'email', 'documentContent', 'appMode', 'messages', 'updatedAt']) 
-        && data.keys().size() == 6
+      return data.keys().hasAll(['uid', 'email', 'name', 'documentContent', 'appMode', 'messages', 'updatedAt']) 
+        && data.keys().size() == 7
         && data.uid is string && data.uid.size() <= 128
         && data.email is string && data.email.size() <= 256
+        && data.name is string && data.name.size() <= 256
         && data.documentContent is string
         && data.appMode is string && data.appMode.size() <= 64
         && data.messages is list && data.messages.size() <= (1000)
@@ -27,7 +28,7 @@ service cloud.firestore {
         isValidProgress(request.resource.data)
         && request.resource.data.uid == resource.data.uid // Immutable
         && (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentContent', 'appMode', 'messages', 'updatedAt', 'email'])
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentContent', 'appMode', 'messages', 'updatedAt', 'email', 'name'])
         )
       );
 

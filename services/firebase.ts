@@ -18,6 +18,7 @@ export interface Message {
 export interface SavedProgress {
   uid: string;
   email: string;
+  name: string;
   documentContent: string;
   appMode: AppMode;
   messages: Message[];
@@ -35,20 +36,21 @@ export async function testConnection() {
 }
 testConnection();
 
-export async function simpleEmailLogin(email: string) {
-  return { uid: email.toLowerCase(), email: email.toLowerCase() };
+export async function simpleEmailLogin(email: string, name: string) {
+  return { uid: email.toLowerCase(), email: email.toLowerCase(), name };
 }
 
 export async function logoutUser() {
   // Do nothing
 }
 
-export async function saveProgressToFirebase(uid: string, email: string, documentContent: string, appMode: AppMode, messages: Message[]) {
+export async function saveProgressToFirebase(uid: string, email: string, name: string, documentContent: string, appMode: AppMode, messages: Message[]) {
   if (!uid) return;
   const progressRef = doc(db, 'progress', uid);
   const data: SavedProgress = {
     uid,
     email: email || '',
+    name: name || '',
     documentContent,
     appMode,
     messages,
@@ -67,13 +69,14 @@ export async function loadProgressFromFirebase(uid: string): Promise<SavedProgre
   return null;
 }
 
-export async function clearProgressFromFirebase(uid: string, email: string) {
+export async function clearProgressFromFirebase(uid: string, email: string, name: string) {
   if (!uid) return;
   // Just clear it by overwriting with empty
   const progressRef = doc(db, 'progress', uid);
   const data: SavedProgress = {
     uid,
     email: email || '',
+    name: name || '',
     documentContent: '',
     appMode: 'LEARN_BOOK',
     messages: [],
