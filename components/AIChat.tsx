@@ -54,6 +54,7 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
   // Start the chat by letting the AI say something first
   useEffect(() => {
     if (messages.length === 0) {
+        // Initial greeting from user (auto-sent)
         handleSend("Xin chào, hãy bắt đầu quá trình học/đánh giá với tôi nhé. Vui lòng đọc tài liệu (nếu có) để chúng ta bắt đầu.");
     }
   }, []);
@@ -70,41 +71,37 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
     const textToSend = forcedInput || input;
     if (!textToSend.trim()) return;
 
-    if (!forcedInput) setInput('');
+    if (input.trim() || forcedInput) setInput('');
 
     const isFirstInitial = !!forcedInput && messages.length === 0;
 
-    if (!isFirstInitial) {
-        setMessages((prev) => [...prev, { id: Date.now().toString(), role: 'user', text: textToSend }]);
-    }
+    // Always add the user message to the UI
+    setMessages((prev) => [...prev, { id: Date.now().toString(), role: 'user', text: textToSend }]);
     
     setIsLoading(true);
 
     try {
-      const chatHistory = [...messages];
-      if (!isFirstInitial) {
-          chatHistory.push({ id: 'temp', role: 'user', text: textToSend });
-      }
-
-      const contents = [];
-      
+      const historyToGen = [...messages, { id: 'temp', role: 'user', text: textToSend }];
+      const contents: any[] = [];
       const documentParts = parsedItems
             .filter((i: any) => i.type === 'file')
             .map((i: any) => ({ fileData: { fileUri: i.uri, mimeType: i.mime } }));
 
-      if (isFirstInitial) {
-          const parts = [...documentParts, { text: textToSend }];
-          contents.push({ role: 'user', parts });
-      } else {
-          for (let i = 0; i < chatHistory.length; i++) {
-             const m = chatHistory[i];
-             // Attach the file Data to the VERY FIRST user message in history
-             if (i === 0 && documentParts.length > 0 && m.role === 'user') {
-                contents.push({ role: m.role, parts: [...documentParts, { text: m.text }] });
-             } else {
-                contents.push({ role: m.role, parts: [{ text: m.text }] });
-             }
-          }
+      // Attach documentParts to the first user message in history
+      let docsAttached = false;
+      for (const m of historyToGen) {
+        if (!docsAttached && m.role === 'user' && documentParts.length > 0) {
+          contents.push({
+            role: 'user',
+            parts: [...documentParts, { text: m.text }]
+          });
+          docsAttached = true;
+        } else {
+          contents.push({
+            role: m.role,
+            parts: [{ text: m.text }]
+          });
+        }
       }
 
       const res = await fetch('/api/generate', {
@@ -116,7 +113,10 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
         }),
       });
 
-      if (!res.ok) throw new Error('API Error');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `API Error (Status ${res.status})`);
+      }
 
       const data = await res.json();
       
@@ -124,13 +124,14 @@ export const AIChat: React.FC<AIChatProps> = ({ documentContent, mode, messages,
         ...prev,
         { id: Date.now().toString(), role: 'model', text: data.text },
       ]);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setMessages((prev) => [
         ...prev,
-        { id: Date.now().toString(), role: 'model', text: "❌ Đã có lỗi xảy ra khi kết nối với AI Gia sư." },
+        { id: Date.now().toString(), role: 'model', text: `❌ ${e.message || "Đã có lỗi xảy ra khi kết nối với AI Gia sư."}` },
       ]);
     } finally {
+
       setIsLoading(false);
     }
   };

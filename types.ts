@@ -4,7 +4,7 @@ export type AppMode = 'LEARN_BOOK' | 'PRACTICE_EXAM';
 export interface Message {
   id: string;
   role: 'user' | 'model';
-  content: string;
+  text: string;
   translation?: string;
   showTranslation?: boolean;
   context?: any;

@@ -53,6 +53,14 @@ export default async function handler(req: any, res: any) {
       }
     });
 
+    if (!result.text) {
+      const candidate = result.candidates?.[0];
+      if (candidate?.finishReason === 'SAFETY') {
+         return res.status(200).json({ text: "⚠️ Nội dung bị chặn bởi bộ lọc an toàn. Vui lòng thử lại." });
+      }
+      return res.status(200).json({ text: "Gia sư không thể phản hồi. (FinishReason: " + (candidate?.finishReason || "UNKNOWN") + ")" });
+    }
+
     res.status(200).json({ text: result.text });
   } catch (err: any) {
     console.error("Vercel Generate Error:", err);

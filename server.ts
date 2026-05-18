@@ -91,6 +91,14 @@ async function startServer() {
         }
       });
 
+      if (!result.text) {
+        const candidate = result.candidates?.[0];
+        if (candidate?.finishReason === 'SAFETY') {
+           return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với yêu cầu khác." });
+        }
+        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Lý do: " + (candidate?.finishReason || "không xác định") + ")" });
+      }
+
       res.json({ text: result.text });
     } catch (err: any) {
       console.error(err);

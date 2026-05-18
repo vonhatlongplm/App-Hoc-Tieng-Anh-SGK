@@ -214,7 +214,7 @@ const MessageBubble: React.FC<any> = ({ message, onWordDoubleClick, onTranslate,
             {!isUser && <div className="flex-shrink-0 w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/20 mt-1"><Bot size={22} /></div>}
             <div className={`flex-1 min-w-0 p-4.5 rounded-2xl shadow-sm border ${isUser ? 'bg-blue-600 text-white rounded-br-none border-blue-500 shadow-blue-600/10 ml-12' : 'bg-white text-slate-800 rounded-bl-none border-slate-200 mr-12'}`}>
                 <div data-message-id={message.id} className="interactive-message-content">
-                    <MarkdownRenderer text={message.content} onWordDoubleClick={onWordDoubleClick} />
+                    <MarkdownRenderer text={message.text} onWordDoubleClick={onWordDoubleClick} />
                 </div>
                 
                 {message.imageUrls?.map((url: string, i: number) => (
@@ -240,7 +240,7 @@ const MessageBubble: React.FC<any> = ({ message, onWordDoubleClick, onTranslate,
                             <select value={speechRate} onChange={(e) => onSpeechRateChange(Number(e.target.value))} className="text-[10px] bg-transparent border-none focus:ring-0 text-slate-500 font-bold px-1"><option value="0.75">0.75x</option><option value="1">1.0x</option><option value="1.25">1.25x</option></select>
                         </div>
 
-                        <button onClick={(e) => { e.stopPropagation(); onTranslate(message.id, message.content); }} disabled={isTranslating} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all border ${message.showTranslation ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-600'}`}>
+                        <button onClick={(e) => { e.stopPropagation(); onTranslate(message.id, message.text); }} disabled={isTranslating} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all border ${message.showTranslation ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-600'}`}>
                             {isTranslating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />} {message.showTranslation ? 'Ẩn dịch' : 'Dịch Việt'}
                         </button>
                         
@@ -333,12 +333,12 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             hasStartedRef.current = true;
             const startLesson = async () => {
                 if (isDiagnosticTest) {
-                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'model', content: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: 'tests', lessonNumber: 0 } });
+                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'model', text: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: 'tests', lessonNumber: 0 } });
                 } else {
                     setIsThinking(true);
                     try {
                         const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any);
-                        addMessage({ id: `msg-${Date.now()}`, role: 'model', content: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+                        addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
                         setToastMessage({ message: "Lỗi khi bắt đầu bài học. Vui lòng thử lại.", type: "error" });
                     } finally {
@@ -416,7 +416,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         };
     }, []);
 
-    const handlePlayEnglishTTS = async (message: Message | { id: string; content: string }) => {
+    const handlePlayEnglishTTS = async (message: Message | { id: string; text: string }) => {
         if (isSpeakingMessageId === message.id) {
             stopTTS();
             setIsSpeakingMessageId(null);
@@ -425,7 +425,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
 
         setIsSpeakingMessageId(message.id);
         try {
-            await playTTS(message.content, ttsMode);
+            await playTTS(message.text, ttsMode);
             setIsSpeakingMessageId(null);
         } catch (e: any) { 
             setIsSpeakingMessageId(null); 
@@ -460,25 +460,25 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         setIsThinking(true);
         setInput('');
         
-        const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', content: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
+        const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', text: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
         addMessage(userMessage);
 
         if (section === Section.TESTS) {
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
                 setDiagnosticStep('writing');
             } else if (diagnosticStep === 'writing') {
                 setDiagnosticWritingAnswer(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
                 setDiagnosticStep('speaking');
             }
             setIsThinking(false);
             return;
         }
         
-        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, content: m.content })), trimmedText, section as any);
-        addMessage({ id: `msg-${Date.now()+1}`, role: 'model', content: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any);
+        addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
         setIsThinking(false);
     };
 
@@ -489,7 +489,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         
         if (section === (SectionId.PHONICS) && diagnosticStep === 'speaking') { // Dummy check for diagnostic
             setDiagnosticStep('submitting');
-            addMessage({ id: `msg-${Date.now()}`, role: 'user', content: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: 'tests', lessonNumber: 0 } });
+            addMessage({ id: `msg-${Date.now()}`, role: 'user', text: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: 'tests', lessonNumber: 0 } });
             try {
                 const result = await geminiService.analyzeDiagnostic(diagnosticGrammarAnswers!, diagnosticWritingAnswer!, audioBase64, "Học viên");
                 onLessonComplete(section, lessonNumber, result);
@@ -502,7 +502,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
         
         const analysis = await geminiService.analyzeSpeakingAudio(audioBase64);
-        addMessage({ id: `msg-${Date.now()}`, role: 'model', content: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
+        addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
         setIsProcessingAudio(false);
     };
 
@@ -532,7 +532,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     };
 
     const handleSelectionRead = (text: string) => {
-        handlePlayEnglishTTS({ id: `sel-${Date.now()}`, content: text });
+        handlePlayEnglishTTS({ id: `sel-${Date.now()}`, text: text });
     };
 
     const handleSelectionTranslate = async (text: string) => {
@@ -557,7 +557,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
     };
     
-    const handleTranslateMessage = async (messageId: string, content: string) => {
+    const handleTranslateMessage = async (messageId: string, text: string) => {
         const msg = messages.find(m => m.id === messageId);
         if (msg?.translation) {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, showTranslation: !m.showTranslation } : m));
@@ -565,7 +565,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
 
         // Check global cache
-        const cached = getCachedTranslation(content);
+        const cached = getCachedTranslation(text);
         if (cached) {
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, translation: cached, showTranslation: true } : m));
             return;
@@ -573,8 +573,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
 
         setTranslatingMessageIds(prev => new Set(prev).add(messageId));
         try {
-            const translation = await geminiService.translateToVietnamese(content);
-            setCachedTranslation(content, translation);
+            const translation = await geminiService.translateToVietnamese(text);
+            setCachedTranslation(text, translation);
             setMessages(prev => prev.map(m => m.id === messageId ? { ...m, translation: translation, showTranslation: true } : m));
         } catch (e: any) {
             setToastMessage({ message: e.message || "Lỗi dịch bài học.", type: "error" });
@@ -652,7 +652,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         />
                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                             {!isReviewMode && (
-                                <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.content || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all" title="Gợi ý">
+                                <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all" title="Gợi ý">
                                     <Lightbulb size={18} />
                                 </button>
                             )}
@@ -704,7 +704,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         onSaveWord(wordOnly);
                     }} 
                     onSaveCollocation={onSaveCollocation} 
-                    onPlayAudio={(text: string) => handlePlayEnglishTTS({id: `pop-${Date.now()}`, content: text})} 
+                    onPlayAudio={(text: string) => handlePlayEnglishTTS({id: `pop-${Date.now()}`, text: text})} 
                     isSpeaking={isSpeakingMessageId?.startsWith('pop-')} 
                     savedVocabulary={savedVocabulary} 
                 />
