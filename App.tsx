@@ -105,7 +105,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartStudy = async (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => {
+  const handleStartStudy = (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => {
+    const targetSection = mode === 'PRACTICE_EXAM' ? SectionId.TESTS : SectionId.RESEARCH;
+    
     if (progress) {
       const newMaterial = {
         id: `mat-${Date.now()}`,
@@ -120,13 +122,15 @@ const App: React.FC = () => {
         documentContent: content, 
         appMode: mode,
         uploadedMaterials: updatedMaterials,
-        currentMaterialId: newMaterial.id
+        currentMaterialId: newMaterial.id,
+        currentSection: targetSection
       };
       setProgress(updated);
-      if (currentUser?.uid) {
-        await saveProgressToFirebase(currentUser.uid, updated);
-      }
       setCurrentScreen('MAIN');
+      
+      if (currentUser?.uid) {
+        saveProgressToFirebase(currentUser.uid, updated).catch(console.error);
+      }
     } else if (currentUser) {
       // Fallback if progress was lost
       const defaultProg = createDefaultProgress(currentUser);
@@ -141,13 +145,15 @@ const App: React.FC = () => {
         documentContent: content, 
         appMode: mode,
         uploadedMaterials: [newMaterial],
-        currentMaterialId: newMaterial.id
+        currentMaterialId: newMaterial.id,
+        currentSection: targetSection
       };
       setProgress(updated);
-      if (currentUser.uid) {
-        await saveProgressToFirebase(currentUser.uid, updated);
-      }
       setCurrentScreen('MAIN');
+      
+      if (currentUser.uid) {
+        saveProgressToFirebase(currentUser.uid, updated).catch(console.error);
+      }
     }
   };
 

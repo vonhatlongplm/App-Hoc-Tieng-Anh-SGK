@@ -45,6 +45,8 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
   
   const contents = [...validHistory, { role: 'user', parts: [{ text }] }];
   
+  let textbookContext = '';
+  
   // Inject file references from documentContent if it's JSON
   if (documentContent) {
     try {
@@ -58,18 +60,28 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
                 mimeType: item.mime || 'application/pdf'
               }
             } as any);
+          } else if (item.type === 'text') {
+            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content}\n`;
           }
         });
+      } else {
+        textbookContext = documentContent;
       }
-    } catch (e) {}
+    } catch (e) {
+      textbookContext = documentContent;
+    }
   }
   
   let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm, chuyên nghiệp và có tư duy sư phạm xuất sắc. 
 Nhiệm vụ của bạn là giảng dạy học sinh dựa trên nội dung tài liệu (Sách giáo khoa, Sách bài tập, Sách giáo viên) đã được tải lên.
 
 LƯU Ý QUAN TRỌNG: 
-1. Học sinh có thể tải lên nhiều tệp (SGK, SBT, SGV). Các tệp đã được đính kèm trực tiếp vào tin nhắn (multimodal). Hãy KẾT NỐI kiến thức giữa các tệp này.
-2. Khi học sinh yêu cầu "Nghiên cứu tệp này", hãy tập trung giảng giải nội dung đó (dịch, ngữ pháp, từ vựng, phát âm).
+1. Các tệp tin (nếu có) đã được đính kèm trực tiếp vào tin nhắn dưới dạng tệp hoặc hình ảnh.
+2. Nội dung văn bản bổ sung (nếu có):
+${textbookContext || '(Không có nội dung văn bản bổ sung)'}
+
+3. Học sinh có thể tải lên nhiều tài liệu. Hãy KẾT NỐI kiến thức giữa chúng.
+4. Khi học sinh yêu cầu "Nghiên cứu tệp này", hãy tập trung giảng giải nội dung đó (dịch, ngữ pháp, từ vựng, phát âm).
 
 HƯỚNG DẪN GIẢNG DẠY:
 1. BÁM SÁT GIÁO TRÌNH: Dạy từng mục một. Section hiện tại: ${section || 'Tổng quát'}.

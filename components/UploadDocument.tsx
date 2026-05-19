@@ -27,13 +27,13 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
       finalItems.push({ type: 'text', content: textInput.trim() });
     }
     if (finalItems.length === 0) return;
-    if (!bookName.trim() || !unit.trim()) {
-      alert("Vui lòng nhập Tên sách và Unit để dễ dàng quản lý trong thư viện.");
-      return;
-    }
+    
+    const finalBookName = bookName.trim() || "Sách giáo trình";
+    const finalUnit = unit.trim() || "Bài học mới";
+    const finalGrade = grade.trim() || "Khác";
     
     // Convert logic to string for backward compatibility
-    onStart(JSON.stringify(finalItems), mode, { bookName: bookName.trim(), grade: grade.trim(), unit: unit.trim() });
+    onStart(JSON.stringify(finalItems), mode, { bookName: finalBookName, grade: finalGrade, unit: finalUnit });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
