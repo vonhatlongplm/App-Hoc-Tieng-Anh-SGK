@@ -9,7 +9,7 @@ export const generateContent = async (contents: any, systemInstruction: string) 
   return await res.json();
 };
 
-export const sendMessageToGemini = async (messages: any[], text: string, section?: string) => {
+export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string) => {
   const formattedHistory = messages.map(m => {
     if (m.parts) return m;
     return {
@@ -19,7 +19,31 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
   });
   
   const contents = [...formattedHistory, { role: 'user', parts: [{ text }] }];
-  const systemInstruction = section ? `You are a specialized tutor for ${section}.` : "You are a helpful English tutor.";
+  
+  let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm, chuyên nghiệp và có tư duy sư phạm xuất sắc. 
+Nhiệm vụ của bạn là giảng dạy học sinh dựa trên nội dung tài liệu (Sách giáo khoa, sách giáo viên, bài tập) đã được tải lên sau đây:
+
+<TEXTBOOK_CONTENT>
+${documentContent || 'Chưa có tài liệu tải lên.'}
+</TEXTBOOK_CONTENT>
+
+HƯỚNG DẪN GIẢNG DẠY:
+1. LUÔN BÁM SÁT GIÁO TRÌNH: Dạy từng mục một theo thứ tự bài học trong sách. Nếu học sinh đang ở section ${section || 'Tổng quát'}, hãy tập trung vào kiến thức tương ứng trong tài liệu.
+2. PHƯƠNG PHÁP SƯ PHẠM:
+   - Giảng giải lý thuyết ngắn gọn, dễ hiểu kèm ví dụ minh họa trực quan.
+   - Sau mỗi phần, hãy đưa ra 1-2 câu hỏi tương tác để kiểm tra.
+   - Khi dạy từ vựng: Cung cấp nghĩa, IPA, loại từ, và câu ví dụ trong ngữ cảnh của sách.
+   - Khi dạy ngữ pháp: Giải thích cấu trúc và cách dùng, cho học sinh đặt câu.
+   - Khi dạy phát âm: Khuyến khích học sinh ghi âm và đưa ra nhận xét chi tiết về tông giọng, trọng âm.
+3. NGÔN NGỮ: Sử dụng tiếng Việt làm ngôn ngữ giảng dạy chính, tiếng Anh cho các ví dụ và trích dẫn.
+4. KHÔNG ẢO GIÁC: Chỉ dạy kiến thức có trong tài liệu hoặc liên quan trực tiếp đến mục tiêu bài học.
+
+Xưng hô: Thầy/Cô và gọi học sinh là Em.`;
+
+  if (section === 'TESTS') {
+    systemInstruction = `Bạn là Giám thị và Người chấm điểm Tiếng Anh. Sử dụng tài liệu đề thi đã tải lên để kiểm tra học sinh từng bước một.`;
+  }
+  
   return await generateContent(contents, systemInstruction);
 };
 

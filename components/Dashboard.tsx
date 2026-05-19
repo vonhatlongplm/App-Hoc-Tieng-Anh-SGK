@@ -37,9 +37,9 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
 
   const renderRoadmap = () => {
     const stages = [
-        { id: 'grammar', title: 'Giai đoạn 1: Nền tảng Ngữ pháp & Từ vựng', description: 'Xây xây dựng nền tảng B2 vững chắc.', unlockedFor: ['A2', 'B1', 'B2', 'C'], section: SectionId.GRAMMAR },
-        { id: 'receptive', title: 'Giai đoạn 2: Kỹ năng Tiếp thu', description: 'Luyện tập Đọc và Nghe chuyên sâu.', unlockedFor: ['B1', 'B2', 'C'], section: SectionId.READING },
-        { id: 'productive', title: 'Giai đoạn 3: Kỹ năng Sản sinh', description: 'Tập trung vào Viết và Nói nâng cao.', unlockedFor: ['B2', 'C'], section: SectionId.WRITING }
+        { id: 'foundation', title: 'Giai đoạn 1: Khám phá & Nền tảng', description: 'AI trích xuất từ vựng và ngữ pháp cốt lõi từ sách giáo khoa.', unlockedFor: ['Undiagnosed', 'A2', 'B1', 'B2', 'C'], section: SectionId.VOCABULARY },
+        { id: 'receptive', title: 'Giai đoạn 2: Tiếp thu & Đọc hiểu', description: 'Phân tích các đoạn văn và bài nghe trong giáo trình.', unlockedFor: ['B1', 'B2', 'C'], section: SectionId.READING },
+        { id: 'productive', title: 'Giai đoạn 3: Thực hành & Vận dụng', description: 'Luyện nói, phát âm và viết dựa trên các chủ đề trong sách.', unlockedFor: ['B2', 'C'], section: SectionId.SPEAKING }
     ];
     
     return stages.map(stage => {
@@ -58,13 +58,13 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
     <div className="p-6 space-y-6 animate-in fade-in duration-500 h-full overflow-y-auto">
       <header className="mb-8">
         <h2 className="text-3xl font-bold text-slate-800 serif">Giáo trình của bạn</h2>
-        <p className="text-slate-500 mt-2">Nghiên cứu tài liệu và lộ trình học tập tối ưu.</p>
+        <p className="text-slate-500 mt-2">AI đã phân tích tài liệu và thiết lập lộ trình học tập tối ưu cho em.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Radar Chart */}
         <div className="col-span-1 lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 min-h-[350px]">
-          <h3 className="text-lg font-semibold mb-4 text-slate-700">Radar Kỹ năng</h3>
+          <h3 className="text-lg font-semibold mb-4 text-slate-700">Năng lực hiện tại</h3>
           <div className="h-[300px] w-full">
             {radarData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -79,7 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
                     <Target size={40} className="opacity-20" />
-                    <p className="text-sm">Chưa có dữ liệu đánh giá chi tiết.</p>
+                    <p className="text-sm">Hãy bắt đầu bài học đầu tiên để AI đánh giá năng lực của em.</p>
                 </div>
             )}
           </div>
@@ -88,19 +88,19 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
         {/* Stats Cards */}
         <div className="space-y-6">
           <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white">
-            <div className="flex items-center gap-3 mb-2"><Clock className="w-5 h-5 opacity-80" /><span className="font-medium opacity-90">Thời gian dự kiến tới B2</span></div>
-            <p className="text-4xl font-bold tracking-tight">{progress.estimatedTimeToB2 || '6 tháng'}</p>
-            <p className="text-sm mt-2 opacity-80">Dựa trên 6 học phần PDF</p>
+            <div className="flex items-center gap-3 mb-2"><Clock className="w-5 h-5 opacity-80" /><span className="font-medium opacity-90">Mục tiêu học tập</span></div>
+            <p className="text-4xl font-bold tracking-tight">Làm chủ nội dung</p>
+            <p className="text-sm mt-3 opacity-90 leading-relaxed font-medium">Lộ trình được thiết kế dựa trên giáo trình em đã tải lên.</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <div className="flex items-center gap-3 mb-4"><Award className="w-5 h-5 text-amber-500" /><span className="font-semibold text-slate-700">Tiến độ</span></div>
+            <div className="flex items-center gap-3 mb-4"><Award className="w-5 h-5 text-amber-500" /><span className="font-semibold text-slate-700">Tiến độ bài học</span></div>
             <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
                 <div className="bg-amber-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${progressPercentage}%` }}></div>
             </div>
             <div className="flex justify-between text-sm text-slate-500">
-                <span>{progress.completedLessons || 0} Bài học</span>
-                <span>{progress.totalLessons || 0} Tổng</span>
+                <span>{progress.completedLessons || 0} Hoàn thành</span>
+                <span>{progress.totalLessons || 180} Tổng số mục</span>
             </div>
           </div>
         </div>
@@ -109,12 +109,12 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
       {/* Personalized Roadmap */}
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
          <div className="col-span-1 lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-semibold mb-4 text-slate-700">Lộ trình được cá nhân hóa</h3>
+            <h3 className="text-lg font-semibold mb-4 text-slate-700">Lộ trình nghiên cứu giáo trình</h3>
             {isUndiagnosed && (
                  <div className="p-4 mb-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm flex items-start gap-3">
                     <Lightbulb className="flex-shrink-0 text-amber-500 mt-0.5" />
                     <div>
-                        <span className="font-bold">Gợi ý từ giáo viên:</span> Lộ trình của bạn hiện đang mở. Hãy làm để thầy/cô có thể cá nhân hóa các giai đoạn học tập phù hợp nhất với năng lực của em nhé.
+                        <span className="font-bold">Gợi ý từ giáo viên:</span> AI đã tổng hợp các cuốn sách của em. Hãy bắt đầu từ Giai đoạn 1 để nắm vững kiến thức nền tảng nhé.
                     </div>
                 </div>
             )}

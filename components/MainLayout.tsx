@@ -82,6 +82,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             lessonNumber={1}
             lessonTitle="Bài học trọng tâm"
             messages={progress.messages || []}
+            documentContent={progress.documentContent}
             addMessage={(msg) => {
                 const newMessages = [...(progress.messages || []), msg];
                 handleUpdateProgress({ messages: newMessages });

@@ -14,6 +14,7 @@ interface LessonViewProps {
   lessonNumber: number;
   lessonTitle: string;
   messages: Message[];
+  documentContent?: string;
   addMessage: (msg: Message) => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   savedVocabulary: VocabularyWord[];
@@ -270,7 +271,7 @@ const MessageBubble: React.FC<any> = ({ message, onWordDoubleClick, onTranslate,
 
 import { useTTS } from '../hooks/useTTS';
 
-const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTitle, messages, addMessage, setMessages, savedVocabulary, onSaveWord, onSaveCollocation, onHintRequest, onLessonComplete, onBackToSyllabus, setToastMessage, onRestart, isReviewMode = false }) => {
+const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTitle, messages, documentContent, addMessage, setMessages, savedVocabulary, onSaveWord, onSaveCollocation, onHintRequest, onLessonComplete, onBackToSyllabus, setToastMessage, onRestart, isReviewMode = false }) => {
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
@@ -337,7 +338,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 } else {
                     setIsThinking(true);
                     try {
-                        const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any);
+                        const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any, documentContent);
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
                         setToastMessage({ message: "Lỗi khi bắt đầu bài học. Vui lòng thử lại.", type: "error" });
@@ -477,7 +478,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             return;
         }
         
-        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any);
+        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any, documentContent);
         addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
         setIsThinking(false);
     };
