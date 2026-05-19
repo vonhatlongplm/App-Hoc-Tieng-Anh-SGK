@@ -343,9 +343,16 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any, documentContent);
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
-                        setToastMessage({ message: `Lỗi khi bắt đầu: ${e.message || "Vui lòng thử lại."}`, type: "error" });
-                    } finally {
+                        console.error("Start Lesson Error:", e);
+                        setToastMessage({ 
+                            message: `Lỗi khi bắt đầu: ${e.message || "Gia sư không phản hồi."} (Vui lòng thử tải lại trang hoặc kiểm tra kết nối mạng.)`, 
+                            type: "error" 
+                        });
+                        // Clear the started flag to allow manual or guided retry
+                        hasStartedRef.current = false;
                         setIsThinking(false);
+                    } finally {
+                        // We don't set isThinking false here because we do it in catch/try branches differently for diagnostic
                     }
                 }
             };

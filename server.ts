@@ -106,9 +106,12 @@ async function startServer() {
       }
 
       const ai = getGenAI();
+      console.log("Initializing Gemini model...");
+      
       const model = ai.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
-        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: String(systemInstruction).substring(0, 30000) }] } : undefined
+        // In most SDK versions, systemInstruction works best as a simple string or a Content object
+        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
       });
       
       const safetySettings = [
@@ -118,18 +121,24 @@ async function startServer() {
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ] as any;
 
-      console.log("Calling Gemini API with model:", model.model);
+      console.log("Preparing contents for Gemini API...");
+      const finalContents = contents.map((c: any) => ({
+        role: c.role === 'model' ? 'model' : 'user',
+        parts: (c.parts || []).filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
+          if (p.text !== undefined) return { text: String(p.text).trim() };
+          if (p.inlineData) return { inlineData: p.inlineData };
+          if (p.fileData) return { fileData: p.fileData };
+          return p;
+        })
+      })).filter((c: any) => c.parts && c.parts.length > 0);
 
+      if (finalContents.length === 0) {
+        return res.status(400).json({ error: "No valid content to send to Gemini" });
+      }
+
+      console.log("Calling Gemini API generateContent...");
       const result = await model.generateContent({ 
-        contents: contents.map((c: any) => ({
-          role: c.role === 'model' ? 'model' : 'user',
-          parts: c.parts.filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
-            if (p.text !== undefined) return { text: String(p.text).trim() };
-            if (p.inlineData) return { inlineData: p.inlineData };
-            if (p.fileData) return { fileData: p.fileData };
-            return p;
-          })
-        })).filter((c: any) => c.parts.length > 0),
+        contents: finalContents,
         safetySettings
       });
       
