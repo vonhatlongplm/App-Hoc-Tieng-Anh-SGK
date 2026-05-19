@@ -58,9 +58,13 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
 
   const validHistory = firstUserIndex !== -1 ? historyParts.slice(firstUserIndex) : [];
   
+  // Prune history to avoid hitting token limits or timeouts
+  // Keep last 10 messages for context
+  const historyToKeep = validHistory.slice(-10);
+  
   // Ensure we don't have consecutive same roles, merging if necessary
   const contents: any[] = [];
-  validHistory.forEach(h => {
+  historyToKeep.forEach(h => {
     if (contents.length > 0 && contents[contents.length - 1].role === h.role) {
       contents[contents.length - 1].parts.push(...h.parts);
     } else {
@@ -70,9 +74,9 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
 
   // Add the new message, merging if the last role is 'user'
   if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-    contents[contents.length - 1].parts.push({ text });
+    contents[contents.length - 1].parts.push({ text: text.substring(0, 5000) });
   } else {
-    contents.push({ role: 'user', parts: [{ text }] });
+    contents.push({ role: 'user', parts: [{ text: text.substring(0, 5000) }] });
   }
   
   let textbookContext = '';
@@ -82,7 +86,10 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
     try {
       const items = JSON.parse(documentContent);
       if (Array.isArray(items)) {
-        items.forEach(item => {
+        items.forEach((item, idx) => {
+          // Limit number of files and text size
+          if (idx > 10) return; 
+
           if (item.type === 'file' && item.uri) {
             contents[contents.length - 1].parts.push({
               fileData: {
@@ -91,14 +98,14 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
               }
             } as any);
           } else if (item.type === 'text') {
-            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content}\n`;
+            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content.substring(0, 10000)}\n`;
           }
         });
       } else {
-        textbookContext = documentContent;
+        textbookContext = documentContent.substring(0, 20000);
       }
     } catch (e) {
-      textbookContext = documentContent;
+      textbookContext = documentContent.substring(0, 20000);
     }
   }
   

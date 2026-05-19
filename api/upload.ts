@@ -26,7 +26,7 @@ const getFileManager = () => {
     if (!key) {
       throw new Error("GEMINI_API_KEY is not set. Please set it in your environment variables (e.g., Vercel Dashboard).");
     }
-    fileManager = new GoogleAIFileManager(key);
+    fileManager = new GoogleAIFileManager(key.trim());
   }
   return fileManager;
 };
@@ -34,6 +34,7 @@ const getFileManager = () => {
 export const config = {
   api: {
     bodyParser: false,
+    responseLimit: false,
   },
 };
 
@@ -63,11 +64,25 @@ export default async function handler(req: any, res: any) {
     
     const { file: uploadedFile } = uploadResult;
     
+    // Wait for the file to be processed and become ACTIVE
+    let fileStatus = uploadedFile;
+    let attempts = 0;
+    while ((fileStatus.state === 'PROCESSING' || fileStatus.state === 'STATE_UNSPECIFIED') && attempts < 15) {
+      attempts++;
+      const waitTime = Math.min(1000 * Math.pow(1.5, attempts), 5000); 
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      fileStatus = await fileManager.getFile(uploadedFile.name);
+    }
+
+    if (fileStatus.state === 'FAILED') {
+        throw new Error(`File processing failed: ${fileStatus.error?.message || "Unknown error"}`);
+    }
+
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
     
     res.status(200).json({
-      fileUri: uploadedFile.uri,
-      mimeType: uploadedFile.mimeType || mimeType,
+      fileUri: fileStatus.uri,
+      mimeType: fileStatus.mimeType || mimeType,
       name: name || file.originalname
     });
 

@@ -26,7 +26,7 @@ const getFileManager = () => {
   if (!fileManager) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    fileManager = new GoogleAIFileManager(key);
+    fileManager = new GoogleAIFileManager(key.trim());
   }
   return fileManager;
 };
@@ -43,7 +43,8 @@ async function startServer() {
     res.json({ 
       status: "ok", 
       hasApiKey: !!key,
-      keyPrefix: key ? key.substring(0, 6) : "none"
+      keyPrefix: key ? key.trim().substring(0, 6) : "none",
+      env: process.env.NODE_ENV
     });
   });
 
@@ -53,8 +54,11 @@ async function startServer() {
       const { name, mimeType } = req.body;
 
       if (!file) {
+        console.error("Upload attempt with no file");
         return res.status(400).json({ error: "No file content" });
       }
+      
+      console.log(`Processing upload: ${file.originalname}, size: ${file.size}`);
       
       const fileManager = getFileManager();
       const uploadResult = await fileManager.uploadFile(file.path, {
@@ -67,50 +71,55 @@ async function startServer() {
       // Wait for the file to be processed and become ACTIVE
       let fileStatus = uploadedFile;
       let attempts = 0;
-      console.log(`File uploaded: ${uploadedFile.name}, status: ${uploadedFile.state}`);
+      console.log(`File uploaded to Gemini: ${uploadedFile.name}, current state: ${uploadedFile.state}`);
       
       while ((fileStatus.state === 'PROCESSING' || fileStatus.state === 'STATE_UNSPECIFIED') && attempts < 15) {
         attempts++;
-        const waitTime = Math.min(1000 * Math.pow(1.5, attempts), 5000); // Exponential backoff
+        const waitTime = Math.min(1000 * Math.pow(1.5, attempts), 5000); 
         await new Promise(resolve => setTimeout(resolve, waitTime));
         fileStatus = await fileManager.getFile(uploadedFile.name);
-        console.log(`Checking file status: ${fileStatus.name}, attempt ${attempts}, status: ${fileStatus.state}`);
+        console.log(`Checking file ${fileStatus.name} status: attempt ${attempts}, state: ${fileStatus.state}`);
       }
 
       if (fileStatus.state === 'FAILED') {
+          console.error("Gemini file processing failed:", fileStatus.error);
           throw new Error(`File processing failed: ${fileStatus.error?.message || "Unknown error"}`);
       }
       
       // Cleanup temp file
-      if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
+      try {
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+        }
+      } catch (e) {
+        console.warn("Could not delete temp file:", e);
       }
       
+      console.log(`Upload successful for ${fileStatus.name}`);
       res.json({
         fileUri: fileStatus.uri,
         mimeType: fileStatus.mimeType || mimeType,
         name: name || file.originalname
       });
     } catch (err: any) {
-      console.error("Upload error:", err);
+      console.error("Full Upload Error Detail:", err);
       res.status(500).json({ error: err.message || "Unknown upload error" });
     }
   });
 
   app.post("/api/generate", async (req, res) => {
+    console.log("Starting /api/generate request...");
     try {
       const { contents, systemInstruction } = req.body;
       
       if (!contents || !Array.isArray(contents)) {
+        console.error("Invalid contents:", contents);
         return res.status(400).json({ error: "Invalid contents format" });
       }
 
       const ai = getGenAI();
-      console.log("Initializing Gemini model...");
-      
       const model = ai.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
-        // In most SDK versions, systemInstruction works best as a simple string or a Content object
         systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
       });
       
@@ -121,7 +130,6 @@ async function startServer() {
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ] as any;
 
-      console.log("Preparing contents for Gemini API...");
       const finalContents = contents.map((c: any) => ({
         role: c.role === 'model' ? 'model' : 'user',
         parts: (c.parts || []).filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
@@ -133,18 +141,20 @@ async function startServer() {
       })).filter((c: any) => c.parts && c.parts.length > 0);
 
       if (finalContents.length === 0) {
+        console.error("Total failure: No valid parts to send");
         return res.status(400).json({ error: "No valid content to send to Gemini" });
       }
 
-      console.log("Calling Gemini API generateContent...");
+      console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API...`);
+      
       const result = await model.generateContent({ 
         contents: finalContents,
         safetySettings
       });
       
       const response = await result.response;
+      console.log("Gemini response received.");
       
-      // Handle safety or other finish reasons
       const candidate = response.candidates?.[0];
       if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
          console.warn("AI Finish Reason:", candidate.finishReason);
@@ -156,12 +166,13 @@ async function startServer() {
       const text = response.text();
 
       if (!text) {
+        console.warn("Empty response from Gemini");
         return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Empty response)" });
       }
 
       res.json({ text });
     } catch (err: any) {
-      console.error("Generate Error Detail:", err);
+      console.error("Detailed /api/generate Error:", err);
       // Try to extract a useful message for the client
       const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Unknown generate error";
       res.status(500).json({ 
