@@ -343,7 +343,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any, documentContent);
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
-                        setToastMessage({ message: "Lỗi khi bắt đầu bài học. Vui lòng thử lại.", type: "error" });
+                        setToastMessage({ message: `Lỗi khi bắt đầu: ${e.message || "Vui lòng thử lại."}`, type: "error" });
                     } finally {
                         setIsThinking(false);
                     }

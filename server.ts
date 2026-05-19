@@ -38,6 +38,15 @@ async function startServer() {
   app.use(express.json({ limit: "500mb" }));
   app.use(express.urlencoded({ limit: "500mb", extended: true }));
 
+  app.get("/api/health", (req, res) => {
+    const key = process.env.GEMINI_API_KEY;
+    res.json({ 
+      status: "ok", 
+      hasApiKey: !!key,
+      keyPrefix: key ? key.substring(0, 6) : "none"
+    });
+  });
+
   app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
       const file = req.file;
@@ -95,10 +104,9 @@ async function startServer() {
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
-        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
+        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
       });
       
-      // Relax safety settings for educational purposes
       const safetySettings = [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -111,14 +119,13 @@ async function startServer() {
       const result = await model.generateContent({ 
         contents: contents.map((c: any) => ({
           role: c.role === 'model' ? 'model' : 'user',
-          parts: c.parts.map((p: any) => {
-            // Ensure part structure is exactly what SDK expects
-            if (p.text !== undefined) return { text: p.text };
+          parts: c.parts.filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
+            if (p.text !== undefined) return { text: String(p.text) };
             if (p.inlineData) return { inlineData: p.inlineData };
             if (p.fileData) return { fileData: p.fileData };
             return p;
           })
-        })),
+        })).filter((c: any) => c.parts.length > 0),
         safetySettings: safetySettings as any
       });
       
