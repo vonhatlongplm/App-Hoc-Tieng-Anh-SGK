@@ -323,10 +323,12 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     
     // Auto-start lesson if empty
     const hasStartedRef = useRef(false);
+    const lastRespondedMsgId = useRef<string | null>(null);
     
-    // Reset hasStartedRef when lesson changes
+    // Reset refs when lesson changes
     useEffect(() => {
         hasStartedRef.current = false;
+        lastRespondedMsgId.current = null;
     }, [section, lessonNumber]);
 
     useEffect(() => {
@@ -348,8 +350,31 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 }
             };
             startLesson();
+        } else if (filteredMessages.length > 0 && !isReviewMode && !isThinking) {
+            const lastMsg = filteredMessages[filteredMessages.length - 1];
+            if (lastMsg.role === 'user' && lastMsg.id !== lastRespondedMsgId.current) {
+                lastRespondedMsgId.current = lastMsg.id;
+                // Trigger AI response for external user messages (like from ResearchView buttons)
+                const getReply = async () => {
+                    setIsThinking(true);
+                    try {
+                        const responseText = await geminiService.sendMessageToGemini(
+                            filteredMessages.slice(0, -1).map(m => ({ role: m.role, text: m.text })), 
+                            lastMsg.text, 
+                            section as any, 
+                            documentContent
+                        );
+                        addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+                    } catch (e: any) {
+                        setToastMessage({ message: "Gia sư gặp lỗi khi phản hồi. Vui lòng thử lại.", type: "error" });
+                    } finally {
+                        setIsThinking(false);
+                    }
+                };
+                getReply();
+            }
         }
-    }, [filteredMessages.length, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking]);
+    }, [filteredMessages.length, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking, filteredMessages, documentContent]);
 
     const prevMsgLength = useRef(filteredMessages.length);
     useEffect(() => { 

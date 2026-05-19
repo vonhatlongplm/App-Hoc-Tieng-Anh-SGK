@@ -12,10 +12,24 @@ export const generateContent = async (contents: any, systemInstruction: string) 
 export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string) => {
   const formattedHistory = messages.map(m => {
     if (m.parts) return m;
-    return {
-      role: m.role,
-      parts: [{ text: m.text || m.content || '' }]
-    };
+    const parts: any[] = [{ text: m.text || m.content || '' }];
+    
+    // Add images if present
+    if (m.imageUrls && m.imageUrls.length > 0) {
+      m.imageUrls.forEach((url: string) => {
+        const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+        if (match) {
+          parts.push({
+            inlineData: {
+                mimeType: match[1],
+                data: match[2]
+            }
+          });
+        }
+      });
+    }
+    
+    return { role: m.role, parts };
   });
   
   const contents = [...formattedHistory, { role: 'user', parts: [{ text }] }];
@@ -23,7 +37,10 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
   let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm, chuyên nghiệp và có tư duy sư phạm xuất sắc. 
 Nhiệm vụ của bạn là giảng dạy học sinh dựa trên nội dung tài liệu (có thể bao gồm Sách giáo khoa, Sách bài tập, Sách giáo viên) đã được tải lên dưới đây. 
 
-LƯU Ý QUAN TRỌNG: Học sinh có thể tải lên nhiều tệp cho cùng một bài học (ví dụ: SGK, SBT, SGV). Bạn cần KẾT NỐI kiến thức giữa các tệp này để giảng dạy chính xác và toàn diện nhất.
+LƯU Ý QUAN TRỌNG: 
+1. Học sinh có thể tải lên nhiều tệp cho cùng một bài học (ví dụ: SGK, SBT, SGV). Bạn cần KẾT NỐI kiến thức giữa các tệp này để giảng dạy chính xác và toàn diện nhất.
+2. Nội dung <TEXTBOOK_CONTENT> có thể là một chuỗi JSON chứa danh sách các tệp/đoạn văn bản. Hãy đọc kỹ từng mục.
+3. Khi học sinh yêu cầu "Nghiên cứu tệp này" hoặc "Học đoạn này", hãy tập trung giảng giải nội dung đó thật chi tiết (bao gồm: dịch nghĩa, giải thích ngữ pháp, từ vựng và hướng dẫn phát âm).
 
 <TEXTBOOK_CONTENT>
 ${documentContent || 'Chưa có tài liệu tải lên.'}
@@ -34,7 +51,7 @@ HƯỚNG DẪN GIẢNG DẠY:
 2. PHƯƠNG PHÁP SƯ PHẠM:
    - Giảng giải lý thuyết ngắn gọn (Ngữ pháp, Từ vựng, Phát âm) dựa trên tài liệu.
    - Luôn đi kèm ví dụ minh họa trích dẫn trực tiếp từ sách.
-   - Sau mỗi phần, hãy chủ động đưa ra 1-2 câu hỏi tương tác để kiểm tra (Ví dụ: "Em hãy thử đặt câu với từ mới này nhé" hoặc "Em có hiểu đoạn hội thoại vừa rồi không?").
+   - Sau mỗi phần, hãy chủ động đưa ra 1-2 câu hỏi tương tác để kiểm tra.
    - Khi dạy từ vựng: Cung cấp nghĩa, IPA, loại từ, và câu ví dụ trong ngữ cảnh của sách.
    - Khi dạy phát âm: Khuyến khích học sinh ghi âm và đưa ra nhận xét chi tiết.
 3. NGÔN NGỮ: Sử dụng tiếng Việt làm ngôn ngữ giảng dạy chính, tiếng Anh cho các ví dụ và trích dẫn.

@@ -49,10 +49,10 @@ export const ResearchView: React.FC<ResearchViewProps> = (props) => {
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Book size={12} /> Tệp {idx + 1}
+                                    <Book size={12} /> {item.name || `Tệp ${idx + 1}`}
                                 </p>
                                 <button 
-                                    onClick={() => props.addMessage({ id: `user-req-${Date.now()}`, role: 'user', text: `Hãy giúp em nghiên cứu và học tập dựa trên nội dung của Tệp ${idx + 1} này nhé.`, type: 'text', timestamp: Date.now() })}
+                                    onClick={() => props.addMessage({ id: `user-req-${Date.now()}`, role: 'user', text: `Hãy giúp em nghiên cứu và học tập dựa trên nội dung của tệp "${item.name || `Tệp ${idx + 1}`}" này nhé.`, type: 'text', timestamp: Date.now(), context: { section: props.currentSection, lessonNumber: 1 } })}
                                     className="text-[10px] font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
                                 >
                                     <Search size={10} /> Nghiên cứu tệp này
@@ -74,7 +74,7 @@ export const ResearchView: React.FC<ResearchViewProps> = (props) => {
                                     <Search size={12} /> Trích đoạn văn bản
                                 </p>
                                 <button 
-                                    onClick={() => props.addMessage({ id: `user-req-${Date.now()}`, role: 'user', text: `Em muốn học kỹ phần này: \n"${item.content.substring(0, 500)}${item.content.length > 500 ? '...' : ''}"\n\nThầy/Cô hãy giải thích, dịch và dạy em phát âm các câu trong đoạn này nhé.`, type: 'text', timestamp: Date.now() })}
+                                    onClick={() => props.addMessage({ id: `user-req-${Date.now()}`, role: 'user', text: `Em muốn học kỹ phần này: \n"${item.content.substring(0, 500)}${item.content.length > 500 ? '...' : ''}"\n\nThầy/Cô hãy giải thích, dịch và dạy em phát âm các câu trong đoạn này nhé.`, type: 'text', timestamp: Date.now(), context: { section: props.currentSection, lessonNumber: 1 } })}
                                     className="text-[10px] font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
                                 >
                                     <Book size={10} /> Học đoạn này
