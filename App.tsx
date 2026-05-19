@@ -4,7 +4,8 @@ import { Loader2 } from 'lucide-react';
 import { Login } from './components/Login';
 import MainLayout from './components/MainLayout';
 import { UploadDocument } from './components/UploadDocument';
-import { loadProgressFromFirebase, clearProgressFromFirebase, saveProgressToFirebase } from './services/firebase';
+import { loadProgressFromFirebase, clearProgressFromFirebase, saveProgressToFirebase, db } from './services/firebase';
+import { doc, getDocFromServer } from 'firebase/firestore';
 import { UserProgress, SectionId, AppMode } from './types';
 import { createInitialDetailedProgress } from './constants';
 
@@ -43,15 +44,18 @@ const App: React.FC = () => {
     setCurrentUser(user);
     setIsSyncing(true);
     try {
-      const saved = await loadProgressFromFirebase(user.uid);
+      // Force loading from server to avoid stale cache issues
+      const progressRef = doc(db, 'progress', user.uid);
+      const snap = await getDocFromServer(progressRef).catch(() => null);
+      const saved = snap?.exists() ? snap.data() as any : null;
+      
       const defaultProg = createDefaultProgress(user);
       
       if (saved && saved.uid) {
-        // Merge saved data with defaults to ensure all required fields are present
+        // Merge saved data with defaults
         const mergedProgress: UserProgress = {
           ...defaultProg,
           ...saved,
-          // Ensure nested objects are also merged or at least exist
           scores: { ...defaultProg.scores, ...(saved.scores || {}) },
           detailedProgress: { ...defaultProg.detailedProgress, ...(saved.detailedProgress || {}) },
           vocabulary: saved.vocabulary || [],
@@ -72,9 +76,15 @@ const App: React.FC = () => {
         setCurrentScreen('UPLOAD');
       }
     } catch (e) {
-      console.error("Failed to load progress", e);
-      setProgress(createDefaultProgress(user));
-      setCurrentScreen('UPLOAD');
+      console.error("Failed to load progress from server, attempting fallback", e);
+      const savedFallback = await loadProgressFromFirebase(user.uid);
+      if (savedFallback) {
+        setProgress(savedFallback);
+        setCurrentScreen('RESUME_PROMPT');
+      } else {
+        setProgress(createDefaultProgress(user));
+        setCurrentScreen('UPLOAD');
+      }
     } finally {
       setIsSyncing(false);
     }

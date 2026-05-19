@@ -1,14 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 import multer from "multer";
 import { GEMINI_MODEL } from "./constants";
 
-let genAI: any = null;
+let genAI: GoogleGenerativeAI | null = null;
 let fileManager: GoogleAIFileManager | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
@@ -17,14 +17,7 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenAI({ 
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
+    genAI = new GoogleGenerativeAI(key);
   }
   return genAI;
 };
@@ -87,6 +80,10 @@ async function startServer() {
       }
 
       const ai = getGenAI();
+      const model = ai.getGenerativeModel({ 
+        model: GEMINI_MODEL.includes('gemini-') ? GEMINI_MODEL : 'gemini-1.5-flash',
+        systemInstruction: systemInstruction || undefined
+      });
       
       // Relax safety settings for educational purposes
       const safetySettings = [
@@ -96,8 +93,7 @@ async function startServer() {
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ];
 
-      const response = await ai.models.generateContent({ 
-        model: GEMINI_MODEL,
+      const result = await model.generateContent({ 
         contents: contents.map((c: any) => ({
           role: c.role === 'model' ? 'model' : 'user',
           parts: c.parts.map((p: any) => {
@@ -107,11 +103,10 @@ async function startServer() {
             return p;
           })
         })),
-        config: {
-          systemInstruction: systemInstruction || undefined,
-          safetySettings: safetySettings as any
-        }
+        safetySettings: safetySettings as any
       });
+      
+      const response = await result.response;
       
       // Handle safety or other finish reasons
       const candidate = response.candidates?.[0];
@@ -122,16 +117,7 @@ async function startServer() {
          }
       }
 
-      let text = '';
-      try {
-        text = response.text || '';
-      } catch (e) {
-        // Fallback for some response structures
-        const candidate = response.candidates?.[0];
-        if (candidate?.content?.parts?.[0]?.text) {
-          text = candidate.content.parts[0].text;
-        }
-      }
+      const text = response.text();
 
       if (!text) {
         return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Empty response)" });
@@ -140,11 +126,9 @@ async function startServer() {
       res.json({ text });
     } catch (err: any) {
       console.error("Generate Error Detail:", err);
-      // Log more info for debugging
-      const errorMsg = err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: errorMsg,
-        details: err.statusText || err.reason || errorMsg
+        error: err.message || "Unknown generate error",
+        details: err.stack || ""
       });
     }
   });

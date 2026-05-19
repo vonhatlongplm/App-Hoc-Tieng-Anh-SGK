@@ -33,9 +33,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   }, []);
 
   // Sync to Firebase whenever progress changes
+  const [isSaving, setIsSaving] = useState(false);
   useEffect(() => {
     if (progress.uid) {
-      saveProgressToFirebase(progress.uid, progress);
+      setIsSaving(true);
+      saveProgressToFirebase(progress.uid, progress)
+        .catch(err => console.error("Auto-save failed:", err))
+        .finally(() => {
+            // Delay clear to avoid flicker
+            setTimeout(() => setIsSaving(false), 800);
+        });
     }
   }, [progress]);
 
@@ -179,6 +186,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
         onBackToUpload={onBackToUpload}
         currentMaterial={progress.uploadedMaterials?.find(m => m.id === progress.currentMaterialId)}
       />
+      
+      {isSaving && (
+        <div className="fixed top-4 right-4 z-[60] flex items-center gap-2 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-slate-700 shadow-xl animate-in fade-in slide-in-from-top-2 duration-300">
+            <Loader2 size={12} className="animate-spin text-teal-400" />
+            Đang đồng bộ...
+        </div>
+      )}
       
       <main className="flex-1 relative overflow-hidden flex flex-col lg:pl-64">
         {renderContent()}
