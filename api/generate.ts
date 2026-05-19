@@ -42,7 +42,7 @@ export default async function handler(req: any, res: any) {
     const ai = getGenAI();
     const model = ai.getGenerativeModel({ 
       model: GEMINI_MODEL,
-      systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: String(systemInstruction).substring(0, 30000) }] } : undefined
+      systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 10000) : undefined
     });
 
     const safetySettings = [
@@ -54,7 +54,7 @@ export default async function handler(req: any, res: any) {
 
     const finalContents = contents.map((c: any) => ({
       role: c.role === 'model' ? 'model' : 'user',
-      parts: (c.parts || []).filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
+      parts: (c.parts || []).filter((p: any) => (p.text && String(p.text).trim()) || p.inlineData || p.fileData).map((p: any) => {
         if (p.text !== undefined) return { text: String(p.text).trim() };
         if (p.inlineData) return { inlineData: p.inlineData };
         if (p.fileData) return { fileData: p.fileData };
@@ -72,13 +72,20 @@ export default async function handler(req: any, res: any) {
     });
 
     const response = await result.response;
-    const text = response.text();
+    const candidate = response.candidates?.[0];
+    
+    if (candidate?.finishReason === 'SAFETY') {
+        return res.status(200).json({ text: "⚠️ Nội dung bị chặn bởi bộ lọc an toàn. Vui lòng thử lại." });
+    }
+
+    let text = "";
+    try {
+      text = response.text();
+    } catch (e) {
+      text = candidate?.finishReason ? `Lỗi AI (Lý do: ${candidate.finishReason})` : "Gia sư không thể phản hồi.";
+    }
 
     if (!text) {
-      const candidate = response.candidates?.[0];
-      if (candidate?.finishReason === 'SAFETY') {
-         return res.status(200).json({ text: "⚠️ Nội dung bị chặn bởi bộ lọc an toàn. Vui lòng thử lại." });
-      }
       return res.status(200).json({ text: "Gia sư không thể phản hồi lúc này. (Empty response)" });
     }
 
