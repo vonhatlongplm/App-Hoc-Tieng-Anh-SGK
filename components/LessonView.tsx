@@ -340,7 +340,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 } else {
                     setIsThinking(true);
                     try {
-                        const responseText = await geminiService.sendMessageToGemini([], `Hãy bắt đầu bài học ${lessonNumber}: ${lessonTitle}`, section as any, documentContent);
+                        console.log("Starting lesson with Gemini...");
+                        const responseText = await geminiService.sendMessageToGemini([], `Chào Thầy/Cô. Em muốn bắt đầu học bài ${lessonNumber}: ${lessonTitle}. Thầy/Cô hãy giới thiệu tổng quan và bắt đầu nhé.`, section as any, documentContent);
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
                         console.error("Start Lesson Error:", e);
@@ -348,11 +349,9 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             message: `Lỗi khi bắt đầu: ${e.message || "Gia sư không phản hồi."} (Vui lòng thử tải lại trang hoặc kiểm tra kết nối mạng.)`, 
                             type: "error" 
                         });
-                        // Clear the started flag to allow manual or guided retry
                         hasStartedRef.current = false;
-                        setIsThinking(false);
                     } finally {
-                        // We don't set isThinking false here because we do it in catch/try branches differently for diagnostic
+                        setIsThinking(false);
                     }
                 }
             };

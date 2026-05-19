@@ -42,7 +42,7 @@ export default async function handler(req: any, res: any) {
     const ai = getGenAI();
     const model = ai.getGenerativeModel({ 
       model: GEMINI_MODEL,
-      systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
+      systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: String(systemInstruction).substring(0, 30000) }] } : undefined
     });
 
     const safetySettings = [

@@ -119,8 +119,8 @@ async function startServer() {
 
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
-        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
+        model: GEMINI_MODEL,
+        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: String(systemInstruction).substring(0, 30000) }] } : undefined
       });
       
       const safetySettings = [

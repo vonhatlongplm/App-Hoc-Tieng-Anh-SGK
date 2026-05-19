@@ -98,39 +98,26 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
               }
             } as any);
           } else if (item.type === 'text') {
-            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content.substring(0, 10000)}\n`;
+            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content.substring(0, 3000)}\n`;
           }
         });
       } else {
-        textbookContext = documentContent.substring(0, 20000);
+        textbookContext = documentContent.substring(0, 5000);
       }
     } catch (e) {
-      textbookContext = documentContent.substring(0, 20000);
+      textbookContext = documentContent.substring(0, 5000);
     }
   }
   
-  let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm, chuyên nghiệp và có tư duy sư phạm xuất sắc. 
-Nhiệm vụ của bạn là giảng dạy học sinh dựa trên nội dung tài liệu (Sách giáo khoa, Sách bài tập, Sách giáo viên) đã được tải lên.
+  let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm. 
+Dạy học bám sát nội dung tài liệu đã tải lên.
+Section: ${section || 'Tổng quát'}. 
 
-LƯU Ý QUAN TRỌNG: 
-1. Các tệp tin (nếu có) đã được đính kèm trực tiếp vào tin nhắn dưới dạng tệp hoặc hình ảnh.
-2. Nội dung văn bản bổ sung (nếu có):
-${textbookContext || '(Không có nội dung văn bản bổ sung)'}
+Nội dung bổ sung:
+${textbookContext || '(Không có)'}
 
-3. Học sinh có thể tải lên nhiều tài liệu. Hãy KẾT NỐI kiến thức giữa chúng.
-4. Khi học sinh yêu cầu "Nghiên cứu tệp này", hãy tập trung giảng giải nội dung đó (dịch, ngữ pháp, từ vựng, phát âm).
-
-HƯỚNG DẪN GIẢNG DẠY:
-1. BÁM SÁT GIÁO TRÌNH: Dạy từng mục một. Section hiện tại: ${section || 'Tổng quát'}.
-2. PHƯƠNG PHÁP:
-   - Lý thuyết ngắn gọn kèm ví dụ trích dẫn từ sách.
-   - Luôn đặt 1-2 câu hỏi tương tác để kiểm tra.
-   - Từ vựng: Nghĩa, IPA, ví dụ.
-   - Phát âm: Nhận xét chi tiết.
-3. NGÔN NGỮ: Tiếng Việt (tiếng Anh cho ví dụ).
-4. KHÔNG ẢO GIÁC.
-
-Xưng hô: Thầy/Cô và gọi học sinh là Em.`;
+Học sinh gọi bạn là "Thầy/Cô", bạn gọi học sinh là "Em". 
+Luôn đặt câu hỏi tương tác sau mỗi phần kiến thức.`;
 
   if (section === 'TESTS') {
     systemInstruction = `Bạn là Giám thị và Người chấm điểm Tiếng Anh. Sử dụng tài liệu đề thi đã tải lên để kiểm tra học sinh từng bước một.`;
