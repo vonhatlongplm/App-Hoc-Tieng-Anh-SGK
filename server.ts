@@ -78,11 +78,21 @@ async function startServer() {
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
         model: GEMINI_MODEL,
-        systemInstruction
+        systemInstruction: systemInstruction ? { role: "system", parts: [{ text: systemInstruction }] } : undefined
       });
 
       const result = await model.generateContent({ contents });
       const response = await result.response;
+      
+      // Handle safety or other finish reasons
+      const candidate = response.candidates?.[0];
+      if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+         console.warn("AI Finish Reason:", candidate.finishReason);
+         if (candidate.finishReason === 'SAFETY') {
+            return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với yêu cầu khác." });
+         }
+      }
+
       const text = response.text();
 
       if (!text) {

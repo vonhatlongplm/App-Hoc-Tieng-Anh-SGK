@@ -63,7 +63,8 @@ export const ResearchView: React.FC<ResearchViewProps> = (props) => {
                             ) : (
                                 <div className="p-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
                                     <FileText size={40} className="mb-2 opacity-20" />
-                                    <p className="text-xs font-medium italic">Nội dung tệp PDF/Doc đã được AI trích xuất để giảng dạy.</p>
+                                    <p className="text-xs font-medium italic text-center">Nội dung tệp "{item.name}" đã hoàn tất trích xuất.</p>
+                                    <p className="text-[10px] mt-1 opacity-60">Em nhấn nút "Nghiên cứu tệp này" để thầy cô hướng dẫn nhé.</p>
                                 </div>
                             )}
                         </div>

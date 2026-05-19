@@ -10,7 +10,9 @@ export const generateContent = async (contents: any, systemInstruction: string) 
 };
 
 export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string) => {
-  const formattedHistory = messages.map(m => {
+  // Gemini history MUST start with 'user' role
+  let firstUserIndex = -1;
+  const historyParts = messages.map(m => {
     if (m.parts) return m;
     const parts: any[] = [{ text: m.text || m.content || '' }];
     
@@ -29,10 +31,19 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
       });
     }
     
-    return { role: m.role, parts };
+    return { role: m.role === 'model' ? 'model' : 'user', parts };
   });
+
+  for (let i = 0; i < historyParts.length; i++) {
+    if (historyParts[i].role === 'user') {
+      firstUserIndex = i;
+      break;
+    }
+  }
+
+  const validHistory = firstUserIndex !== -1 ? historyParts.slice(firstUserIndex) : [];
   
-  const contents = [...formattedHistory, { role: 'user', parts: [{ text }] }];
+  const contents = [...validHistory, { role: 'user', parts: [{ text }] }];
   
   let systemInstruction = `Bạn là một Giáo viên Tiếng Anh AI (AI Tutor) tận tâm, chuyên nghiệp và có tư duy sư phạm xuất sắc. 
 Nhiệm vụ của bạn là giảng dạy học sinh dựa trên nội dung tài liệu (có thể bao gồm Sách giáo khoa, Sách bài tập, Sách giáo viên) đã được tải lên dưới đây. 
