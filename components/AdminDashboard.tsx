@@ -21,11 +21,11 @@ export interface ProcessedStudentProfile {
 }
 
 
-const SkillProgressCard: React.FC<{ section: SectionId, progress: ProcessedStudentProfile['detailedProgress'], totalLessons: number }> = ({ section, progress, totalLessons }) => {
-    const sectionProgress = progress[section];
+const SkillProgressCard: React.FC<{ section: SectionId, progress: any, totalLessons: number }> = ({ section, progress, totalLessons }) => {
+    const sectionProgress = progress?.[section];
     if (!sectionProgress) return null;
 
-    const completedCount = Array.isArray(sectionProgress.completedLessons) ? sectionProgress.completedLessons.length : 0;
+    const completedCount = Array.isArray(sectionProgress.completedLessons) ? sectionProgress.completedLessons.length : (typeof sectionProgress.completedLessons === 'number' ? sectionProgress.completedLessons : 0);
     const percentage = Math.round((completedCount / totalLessons) * 100);
     const color = percentage > 66 ? 'bg-green-500' : percentage > 33 ? 'bg-blue-500' : 'bg-amber-500';
 
@@ -45,7 +45,7 @@ const SkillProgressCard: React.FC<{ section: SectionId, progress: ProcessedStude
 };
 
 const StudentDetailView: React.FC<{ profile: ProcessedStudentProfile, onBack: () => void }> = ({ profile, onBack }) => {
-    const sectionsWithLessons = [SectionId.GRAMMAR, SectionId.VOCAB, SectionId.LISTENING, SectionId.READING, SectionId.WRITING, SectionId.SPEAKING];
+    const sectionsWithLessons = [SectionId.GRAMMAR, SectionId.VOCABULARY, SectionId.LISTENING, SectionId.READING, SectionId.WRITING, SectionId.SPEAKING];
 
     return (
         <div className="p-6 animate-in fade-in duration-300 h-full overflow-y-auto">
@@ -251,7 +251,7 @@ const AdminDashboard: React.FC = () => {
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                             {profiles.map(profile => {
-                                const totalCompleted = Object.values(profile.detailedProgress).reduce((acc: number, curr: LessonProgress) => acc + (curr.completedLessons?.length || 0), 0);
+                                const totalCompleted = Object.values(profile.detailedProgress || {}).reduce((acc: number, curr: any) => acc + (Array.isArray(curr?.completedLessons) ? curr.completedLessons.length : (typeof curr?.completedLessons === 'number' ? curr.completedLessons : 0)), 0);
                                 return (
                                 <tr key={profile.id} className="hover:bg-slate-50">
                                     <td className="px-6 py-4 whitespace-nowrap align-top">

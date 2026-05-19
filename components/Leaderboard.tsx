@@ -22,23 +22,24 @@ const Leaderboard: React.FC = () => {
         if (data) {
             const processed = data.map(item => {
                 const profile = item.profile_data as any;
-                // FIX: Explicitly cast the detailed progress as LessonProgress array to resolve arithmetic operation type errors.
-                const totalCompleted: number = (Object.values(profile.progress?.detailedProgress || createInitialDetailedProgress()) as LessonProgress[])
-                    .reduce((acc: number, curr: LessonProgress) => acc + (curr.completedLessons?.length || 0), 0);
-                // FIX: Explicitly cast masteredWords as number to resolve arithmetic operation type errors.
-                const masteredWords: number = (profile.vocabulary?.filter((v: any) => v.masteryLevel === 3).length || 0) as number;
+                // Safely calculate total completed lessons from the detailedProgress Record
+                const totalCompleted: number = Object.values(profile?.detailedProgress || {}).reduce((acc: number, curr: any) => 
+                    acc + (Array.isArray(curr?.completedLessonNumbers) ? curr.completedLessonNumbers.length : 
+                          (typeof curr?.completedLessons === 'number' ? (curr.completedLessons as number) : 0)), 0) as number;
+                
+                const masteredWords: number = (profile?.vocabulary?.filter((v: any) => v.masteryLevel >= 3).length || 0) as number;
                 
                 // Score calculation: Lessons count + Words count + Level bonus
                 let score = (totalCompleted * 10) + (masteredWords * 5);
-                if (profile.progress?.diagnosedLevel === 'B2') score += 100;
-                if (profile.progress?.diagnosedLevel === 'C') score += 200;
+                if (profile?.diagnosedLevel === 'B2') score += 100;
+                if (profile?.diagnosedLevel === 'C') score += 200;
 
                 return {
-                    name: profile.progress?.userName || item.user_id.split('@')[0],
+                    name: profile?.name || item.user_id.split('@')[0],
                     score,
                     lessons: totalCompleted,
                     words: masteredWords,
-                    level: profile.progress?.diagnosedLevel || 'A2'
+                    level: profile?.diagnosedLevel || 'A2'
                 };
             }).sort((a, b) => b.score - a.score);
             setProfiles(processed);

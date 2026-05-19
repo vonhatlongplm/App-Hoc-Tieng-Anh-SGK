@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AIChat } from './AIChat';
 import { ArrowLeft, BookOpen, Send } from 'lucide-react';
-import { AppMode } from '../App';
+import { AppMode } from '../types';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {

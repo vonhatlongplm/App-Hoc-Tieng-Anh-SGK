@@ -456,7 +456,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const handleSendMessage = async (text: string, audio?: Blob) => {
         if (isThinking || isProcessingAudio || isReviewMode) return;
         const trimmedText = text.trim();
-        if (section === Section.TESTS && diagnosticStep !== 'speaking' && !trimmedText) return;
+        if (section === SectionId.TESTS && diagnosticStep !== 'speaking' && !trimmedText) return;
         setIsThinking(true);
         setInput('');
         

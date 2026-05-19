@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles, Bot, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { AppMode } from '../App';
+import { AppMode } from '../types';
 
 interface Message {
   id: string;

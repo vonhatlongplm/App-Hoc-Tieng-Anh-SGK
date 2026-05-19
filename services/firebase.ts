@@ -52,10 +52,28 @@ export async function clearProgressFromFirebase(uid: string, email: string, name
     documentContent: '',
     appMode: 'LEARN_BOOK',
     messages: [],
+    vocabulary: [],
+    diagnosedLevel: 'Undiagnosed',
+    detailedProgress: {
+        vocab: 0,
+        grammar: 0,
+        reading: 0,
+        listening: 0,
+        speaking: 0,
+        writing: 0,
+        phonics: 0
+    },
     updatedAt: Date.now(),
     completedLessons: 0,
     totalLessons: 180,
-    scores: {},
+    scores: {
+        'Vocabulary': 0,
+        'Grammar': 0,
+        'Reading': 0,
+        'Listening': 0,
+        'Speaking': 0,
+        'Writing': 0
+    },
     estimatedTimeToB2: '6 tháng'
   };
   await setDoc(progressRef, data);

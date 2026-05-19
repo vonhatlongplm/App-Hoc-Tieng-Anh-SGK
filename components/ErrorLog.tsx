@@ -14,13 +14,15 @@ const ErrorLog: React.FC<ErrorLogProps> = ({ logs, onDelete }) => {
   const [selectedSection, setSelectedSection] = useState<Section | 'All'>('All');
 
   const filteredLogs = logs.filter(log => {
+    const upgradedText = typeof log.upgraded === 'string' ? log.upgraded : '';
     const matchesSearch = log.original.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          log.upgraded.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSection = selectedSection === 'All' || log.section === selectedSection;
+                          upgradedText.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSection = selectedSection === 'All' || 
+                           (typeof log.section === 'string' ? log.section === selectedSection : (log.section as any) === selectedSection);
     return matchesSearch && matchesSection;
   });
 
-  const sections = Array.from(new Set(logs.map(log => log.section)));
+  const sections = Array.from(new Set(logs.map(log => typeof log.section === 'string' ? log.section : (log.section as any)))).filter(Boolean);
 
   return (
     <div className="p-0 md:p-6 space-y-6 animate-in fade-in duration-500 h-full overflow-y-auto">

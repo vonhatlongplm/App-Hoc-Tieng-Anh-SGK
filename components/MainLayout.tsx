@@ -69,7 +69,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
       case SectionId.ADMIN:
         return <AdminDashboard />;
       case SectionId.GRAMMAR:
-      case SectionId.VOCAB:
+      case SectionId.VOCABULARY:
       case SectionId.LISTENING:
       case SectionId.READING:
       case SectionId.WRITING:
@@ -88,12 +88,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             }}
             setMessages={(msgs) => handleUpdateProgress({ messages: msgs as Message[] })}
             savedVocabulary={progress.vocabulary || []}
-            onSaveWord={handleSaveWord}
+            onSaveWord={(wordData) => handleSaveWord(wordData as VocabularyWord)}
             onSaveCollocation={(c) => console.log("Save col", c)}
             onHintRequest={() => handleUpdateProgress({ hintUsageCount: (progress.hintUsageCount || 0) + 1 })}
             onLessonComplete={() => {}}
             onBackToSyllabus={() => setCurrentSection(SectionId.ROADMAP)}
-            setToastMessage={(msg) => setToast({ message: msg, type: 'success' })}
+            setToastMessage={(toastObj) => setToast(toastObj as any)}
             onRestart={() => handleUpdateProgress({ messages: [] })}
           />
         );

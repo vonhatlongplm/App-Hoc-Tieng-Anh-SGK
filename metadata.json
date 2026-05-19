@@ -1,6 +1,6 @@
 {
-  "name": "OmniEnglish",
-  "description": "Ứng dụng giúp học sinh tải lên bất kỳ tài liệu nào (sách, giáo trình, đề thi) và AI sẽ đóng vai trò gia sư giảng giải hoặc chấm thi từng bước một.",
+  "name": "Omni English Tutor",
+  "description": "Ứng dụng gia sư Tiếng Anh AI giúp học tập dựa trên mọi tài liệu (sách, giáo trình, đề thi). Phân tích chuyên sâu từ vựng, ngữ pháp và rèn luyện 4 kỹ năng.",
   "requestFramePermissions": [
     "microphone"
   ],

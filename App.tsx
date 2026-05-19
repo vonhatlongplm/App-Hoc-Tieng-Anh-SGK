@@ -21,13 +21,21 @@ const App: React.FC = () => {
     diagnosedLevel: 'Undiagnosed',
     completedLessons: 0,
     totalLessons: 180,
-    scores: {},
+    scores: {
+        'Vocabulary': 0,
+        'Grammar': 0,
+        'Reading': 0,
+        'Listening': 0,
+        'Speaking': 0,
+        'Writing': 0
+    },
     estimatedTimeToB2: '6 tháng',
     detailedProgress: createInitialDetailedProgress(),
     vocabulary: [],
     messages: [],
     appMode: 'LEARN_BOOK',
-    documentContent: ''
+    documentContent: '',
+    updatedAt: Date.now()
   });
 
   const handleLogin = async (user: any) => {
@@ -35,14 +43,29 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       const saved = await loadProgressFromFirebase(user.uid);
-      if (saved && saved.uid && saved.documentContent) {
-        setProgress(saved);
-        setCurrentScreen('RESUME_PROMPT');
-      } else if (saved && saved.uid) {
-        setProgress(saved);
-        setCurrentScreen('UPLOAD');
+      const defaultProg = createDefaultProgress(user);
+      
+      if (saved && saved.uid) {
+        // Merge saved data with defaults to ensure all required fields are present
+        const mergedProgress: UserProgress = {
+          ...defaultProg,
+          ...saved,
+          // Ensure nested objects are also merged or at least exist
+          scores: { ...defaultProg.scores, ...(saved.scores || {}) },
+          detailedProgress: { ...defaultProg.detailedProgress, ...(saved.detailedProgress || {}) },
+          vocabulary: saved.vocabulary || [],
+          messages: saved.messages || []
+        };
+        
+        setProgress(mergedProgress);
+        
+        if (saved.documentContent) {
+          setCurrentScreen('RESUME_PROMPT');
+        } else {
+          setCurrentScreen('UPLOAD');
+        }
       } else {
-        setProgress(createDefaultProgress(user));
+        setProgress(defaultProg);
         setCurrentScreen('UPLOAD');
       }
     } catch (e) {
@@ -82,6 +105,12 @@ const App: React.FC = () => {
   const handleStartStudy = (content: string, mode: AppMode) => {
     if (progress) {
       const updated = { ...progress, documentContent: content, appMode: mode };
+      setProgress(updated);
+      setCurrentScreen('MAIN');
+    } else if (currentUser) {
+      // Fallback if progress was lost
+      const defaultProg = createDefaultProgress(currentUser);
+      const updated = { ...defaultProg, documentContent: content, appMode: mode };
       setProgress(updated);
       setCurrentScreen('MAIN');
     }
@@ -128,8 +157,23 @@ const App: React.FC = () => {
         <UploadDocument onStart={handleStartStudy} />
       )}
 
-      {currentScreen === 'MAIN' && progress && (
-        <MainLayout initialProgress={progress} onBackToUpload={() => setCurrentScreen('UPLOAD')} />
+      {currentScreen === 'MAIN' && (
+        progress ? (
+          <MainLayout initialProgress={progress} onBackToUpload={() => setCurrentScreen('UPLOAD')} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-white grow">
+            <div className="text-center">
+              <Loader2 className="animate-spin w-10 h-10 text-teal-600 mx-auto mb-4" />
+              <p className="text-slate-600 font-medium">Đang chuẩn bị không gian học tập...</p>
+              <button 
+                onClick={() => setCurrentScreen('LOGIN')}
+                className="mt-4 text-teal-600 text-sm font-bold underline"
+              >
+                Quay lại đăng nhập nếu đợi quá lâu
+              </button>
+            </div>
+          </div>
+        )
       )}
     </div>
   );

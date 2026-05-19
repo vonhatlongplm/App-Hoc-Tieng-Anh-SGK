@@ -11,13 +11,13 @@ interface SyllabusViewProps {
 }
 
 const SyllabusView: React.FC<SyllabusViewProps> = ({ section, progress, onStartLesson, onReviewLesson }) => {
-  const lessons = LESSON_DATA[section] || [];
+  const lessons = (LESSON_DATA as any)[section] || [];
   const totalLessons = lessons.length;
-  const completedCount = progress?.completedLessons?.length || 0;
+  const completedCount = Array.isArray(progress?.completedLessonNumbers) ? progress.completedLessonNumbers.length : 0;
   const progressPercentage = totalLessons > 0 ? (completedCount / totalLessons) * 100 : 0;
 
   const getLessonStatus = (lessonNumber: number): 'completed' | 'not_started' => {
-    return progress?.completedLessons?.includes(lessonNumber) ? 'completed' : 'not_started';
+    return Array.isArray(progress?.completedLessonNumbers) && progress.completedLessonNumbers.includes(lessonNumber) ? 'completed' : 'not_started';
   };
 
   return (

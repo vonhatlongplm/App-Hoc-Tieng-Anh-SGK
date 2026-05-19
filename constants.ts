@@ -4,7 +4,7 @@ export const GEMINI_MODEL = "gemini-flash-latest";
 
 export const DEFAULT_SYSTEM_INSTRUCTION = `Bạn là một Giáo viên Tiếng Anh AI toàn năng.`;
 
-export const LESSON_DATA = [];
+export const LESSON_DATA: Record<string, any[]> = {};
 export const PHONICS_RULES = [];
 export const B2_VOCAB_DECKS = [];
 export const DIAGNOSTIC_PROMPT_EN = "Diagnostic prompt in English";

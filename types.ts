@@ -23,17 +23,20 @@ export interface UserProgress {
   appMode: AppMode;
   messages: Message[];
   updatedAt: any;
-  diagnosedLevel?: string;
-  scores?: Record<string, number>;
-  estimatedTimeToB2?: string;
-  completedLessons?: number;
-  totalLessons?: number;
-  detailedProgress?: any;
+  diagnosedLevel: string;
+  scores: Record<string, number>;
+  estimatedTimeToB2: string;
+  completedLessons: number;
+  totalLessons: number;
+  detailedProgress: any;
+  vocabulary: VocabularyWord[];
+  isAdmin?: boolean;
+  hintUsageCount?: number;
 }
 
 export interface StudentProfile extends UserProgress {
-  progress: number;
-  vocabulary: number;
+  progressPercentage: number;
+  wordCount: number;
 }
 
 export enum SectionId {
@@ -53,9 +56,9 @@ export enum SectionId {
   ADMIN = 'Quản trị'
 }
 
-export const Section = SectionId; // Alias to support legacy code using Section.VOCAB
-
-export interface Section {
+export type Section = SectionId;
+// Rename the interface to avoid conflict
+export interface SectionMetadata {
   id: SectionId;
   title: string;
   type: SectionId;
@@ -66,7 +69,7 @@ export interface LessonProgress {
   id: string;
   status: 'locked' | 'available' | 'completed';
   score?: number;
-  completedLessons?: number;
+  completedLessonNumbers?: number[];
   currentLesson?: number;
 }
 
@@ -74,6 +77,7 @@ export interface VocabularyCollocation {
   phrase: string;
   meaning: string;
   isSaved?: boolean;
+  masteryLevel?: number;
 }
 
 export interface VocabularyWord {
@@ -102,12 +106,12 @@ export interface VocabularyWord {
 
 export interface CorrectionEntry {
   original: string;
-  corrected: string;
+  upgraded: string;
   explanation: string;
   id?: string;
   section?: string | Section;
   timestamp?: number;
-  upgraded?: boolean;
+  isUpgraded?: boolean;
 }
 
 export interface DiagnosticAttempt {
@@ -136,4 +140,5 @@ export interface LessonHistoryEntry {
 export interface SkillScore {
   skill: string;
   score: number;
+  fullMark?: number;
 }

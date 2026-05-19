@@ -1,12 +1,12 @@
 
 // Import React to resolve 'Cannot find namespace React' errors.
 import React from 'react';
-import { Section, VocabularyWord } from '../types';
+import { SectionId, VocabularyWord } from '../types';
 import { Map, BookText, Library, Headphones, Mic, Book, PenTool, Star, Bell, LogOut, Shield, History, ClipboardCheck, MessageSquareWarning, Trophy, Volume2, BookOpen, X } from 'lucide-react';
 
 interface SidebarProps {
-  currentSection: Section;
-  setSection: (s: Section) => void;
+  currentSection: SectionId;
+  setSection: (s: SectionId) => void;
   isOpen: boolean;
   toggleSidebar: () => void;
   words: VocabularyWord[];
@@ -16,31 +16,31 @@ interface SidebarProps {
   onBackToUpload?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, toggleSidebar, words, isDiagnosed, onLogout, isTeacher, onBackToUpload }) => {
-  const hasBacklog = words.some(w => w.isBacklogged);
+const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, toggleSidebar, words = [], isDiagnosed, onLogout, isTeacher, onBackToUpload }) => {
+  const hasBacklog = (words || []).some(w => w.isBacklogged);
   
   const baseMenuItems = [
-    { id: Section.ROADMAP, icon: Map, label: Section.ROADMAP },
-    { id: Section.TESTS, icon: ClipboardCheck, label: Section.TESTS },
-    { id: Section.VOCABULARY, icon: Library, label: Section.VOCABULARY },
-    { id: Section.GRAMMAR, icon: BookText, label: Section.GRAMMAR },
-    { id: Section.LISTENING, icon: Headphones, label: Section.LISTENING },
-    { id: Section.READING, icon: Book, label: Section.READING },
-    { id: Section.WRITING, icon: PenTool, label: Section.WRITING },
-    { id: Section.SPEAKING, icon: Mic, label: Section.SPEAKING },
-    { id: Section.PHONICS, icon: Volume2, label: Section.PHONICS },
-    { id: Section.MY_VOCABULARY, icon: Star, label: Section.MY_VOCABULARY, notification: hasBacklog },
-    { id: Section.ERROR_LOG, icon: MessageSquareWarning, label: Section.ERROR_LOG },
-    { id: Section.LEADERBOARD, icon: Trophy, label: Section.LEADERBOARD },
-    { id: Section.MY_HISTORY, icon: History, label: Section.MY_HISTORY }
+    { id: SectionId.ROADMAP, icon: Map, label: 'Giáo trình nghiên cứu' },
+    { id: SectionId.TESTS, icon: ClipboardCheck, label: 'Luyện giải đề' },
+    { id: SectionId.VOCABULARY, icon: Library, label: 'Học từ vựng' },
+    { id: SectionId.GRAMMAR, icon: BookText, label: 'Ngữ pháp' },
+    { id: SectionId.LISTENING, icon: Headphones, label: 'Luyện nghe' },
+    { id: SectionId.READING, icon: Book, label: 'Luyện đọc' },
+    { id: SectionId.WRITING, icon: PenTool, label: 'Luyện viết' },
+    { id: SectionId.SPEAKING, icon: Mic, label: 'Luyện nói' },
+    { id: SectionId.PHONICS, icon: Volume2, label: 'Phát âm' },
+    { id: SectionId.MY_VOCABULARY, icon: Star, label: 'Tháp từ vựng', notification: hasBacklog },
+    { id: SectionId.ERROR_LOG, icon: MessageSquareWarning, label: 'Nhật ký lỗi' },
+    { id: SectionId.LEADERBOARD, icon: Trophy, label: 'Bảng xếp hạng' },
+    { id: SectionId.MY_HISTORY, icon: History, label: 'Lịch sử học' }
   ];
 
-  const teacherMenuItem = { id: Section.ADMIN, icon: Shield, label: Section.ADMIN };
+  const teacherMenuItem = { id: SectionId.ADMIN, icon: Shield, label: 'Quản trị' };
   
-  let menuItems: Array<{id: Section; icon: React.ElementType; label: string; notification?: boolean;}>;
+  let menuItems: Array<{id: SectionId; icon: any; label: string; notification?: boolean;}>;
 
   if (isTeacher) {
-    menuItems = baseMenuItems.filter(item => ![Section.MY_HISTORY, Section.TESTS, Section.ERROR_LOG].includes(item.id));
+    menuItems = baseMenuItems.filter(item => ![SectionId.MY_HISTORY, SectionId.TESTS, SectionId.ERROR_LOG].includes(item.id));
     menuItems.push(teacherMenuItem);
   } else {
     menuItems = baseMenuItems;

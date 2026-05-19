@@ -43,11 +43,16 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
     ];
     
     return stages.map(stage => {
-        const isUnlocked = isUndiagnosed || stage.unlockedFor.includes(progress.diagnosedLevel);
-        const status = isUnlocked ? 'recommended' : 'locked';
+        const isUnlocked = isUndiagnosed || stage.unlockedFor.includes(progress.diagnosedLevel || 'Undiagnosed');
+        const status = (isUnlocked ? 'recommended' : 'locked') as 'recommended' | 'locked';
         return <RoadmapStage key={stage.id} {...stage} status={status} onClick={() => onStartLesson(stage.section)} />;
     });
   }
+
+  const radarData = Object.entries(progress.scores || {}).map(([skill, score]) => ({ skill, score }));
+  const progressPercentage = progress.totalLessons && progress.totalLessons > 0 
+    ? Math.min(100, (progress.completedLessons / progress.totalLessons) * 100) 
+    : 0;
 
   return (
     <div className="p-6 space-y-6 animate-in fade-in duration-500 h-full overflow-y-auto">
@@ -58,18 +63,25 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Radar Chart */}
-        <div className="col-span-1 lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="col-span-1 lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 min-h-[350px]">
           <h3 className="text-lg font-semibold mb-4 text-slate-700">Radar Kỹ năng</h3>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={Object.entries(progress.scores || {}).map(([skill, score]) => ({ skill, score }))}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="skill" tick={{ fill: '#475569', fontSize: 12 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 50]} tick={false} />
-                <Radar name="Current Level" dataKey="score" stroke="#0d9488" fill="#14b8a6" fillOpacity={0.5} />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} itemStyle={{ color: '#0f766e', fontWeight: 600 }} />
-              </RadarChart>
-            </ResponsiveContainer>
+            {radarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                    <PolarGrid stroke="#e2e8f0" />
+                    <PolarAngleAxis dataKey="skill" tick={{ fill: '#475569', fontSize: 12 }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 50]} tick={false} />
+                    <Radar name="Current Level" dataKey="score" stroke="#0d9488" fill="#14b8a6" fillOpacity={0.5} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} itemStyle={{ color: '#0f766e', fontWeight: 600 }} />
+                </RadarChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
+                    <Target size={40} className="opacity-20" />
+                    <p className="text-sm">Chưa có dữ liệu đánh giá chi tiết.</p>
+                </div>
+            )}
           </div>
         </div>
 
@@ -77,14 +89,19 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
         <div className="space-y-6">
           <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white">
             <div className="flex items-center gap-3 mb-2"><Clock className="w-5 h-5 opacity-80" /><span className="font-medium opacity-90">Thời gian dự kiến tới B2</span></div>
-            <p className="text-4xl font-bold tracking-tight">{progress.estimatedTimeToB2}</p>
+            <p className="text-4xl font-bold tracking-tight">{progress.estimatedTimeToB2 || '6 tháng'}</p>
             <p className="text-sm mt-2 opacity-80">Dựa trên 6 học phần PDF</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <div className="flex items-center gap-3 mb-4"><Award className="w-5 h-5 text-amber-500" /><span className="font-semibold text-slate-700">Tiến độ</span></div>
-            <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2"><div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${(progress.completedLessons / progress.totalLessons) * 100}%` }}></div></div>
-            <div className="flex justify-between text-sm text-slate-500"><span>{progress.completedLessons} Bài học</span><span>{progress.totalLessons} Tổng</span></div>
+            <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
+                <div className="bg-amber-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${progressPercentage}%` }}></div>
+            </div>
+            <div className="flex justify-between text-sm text-slate-500">
+                <span>{progress.completedLessons || 0} Bài học</span>
+                <span>{progress.totalLessons || 0} Tổng</span>
+            </div>
           </div>
         </div>
       </div>
