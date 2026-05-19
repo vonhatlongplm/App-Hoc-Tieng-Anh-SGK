@@ -10,6 +10,8 @@ import { createInitialDetailedProgress } from '../constants';
 import Toast from './Toast';
 import { saveProgressToFirebase } from '../services/firebase';
 
+import { Menu, X } from 'lucide-react';
+
 interface MainLayoutProps {
   initialProgress: UserProgress;
   onBackToUpload: () => void;
@@ -18,8 +20,15 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
   const [currentSection, setCurrentSection] = useState<SectionId>(SectionId.ROADMAP);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default false for mobile
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  // Auto-set sidebar open on desktop
+  useEffect(() => {
+    if (window.innerWidth >= 1024) {
+      setIsSidebarOpen(true);
+    }
+  }, []);
 
   // Sync to Firebase whenever progress changes
   useEffect(() => {
@@ -46,12 +55,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
     handleUpdateProgress({ vocabulary: newVocab });
   };
 
+  const handleDeleteWord = (wordStr: string) => {
+    const newVocab = progress.vocabulary?.filter(w => w.word !== wordStr) || [];
+    handleUpdateProgress({ vocabulary: newVocab });
+  };
+
   const renderContent = () => {
     switch (currentSection) {
       case SectionId.ROADMAP:
         return <Dashboard progress={progress} onStartLesson={(section) => setCurrentSection(section)} />;
       case SectionId.MY_VOCABULARY:
-        return <Vocabulary words={progress.vocabulary || []} onUpdateWord={handleUpdateWord} />;
+        return <Vocabulary words={progress.vocabulary || []} onUpdateWord={handleUpdateWord} onDelete={handleDeleteWord} />;
       case SectionId.ADMIN:
         return <AdminDashboard />;
       case SectionId.GRAMMAR:
@@ -89,7 +103,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden relative">
+      {/* Mobile Toggle Button */}
+      {!isSidebarOpen && (
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="lg:hidden fixed top-4 left-4 z-40 p-2 bg-slate-900 border border-slate-800 text-white rounded-lg shadow-lg hover:bg-slate-800 transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+      )}
+
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40 transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       <Sidebar 
         currentSection={currentSection} 
         setSection={setCurrentSection} 

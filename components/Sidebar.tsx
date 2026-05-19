@@ -2,7 +2,7 @@
 // Import React to resolve 'Cannot find namespace React' errors.
 import React from 'react';
 import { Section, VocabularyWord } from '../types';
-import { Map, BookText, Library, Headphones, Mic, Book, PenTool, Star, Bell, LogOut, Shield, History, ClipboardCheck, MessageSquareWarning, Trophy, Volume2 } from 'lucide-react';
+import { Map, BookText, Library, Headphones, Mic, Book, PenTool, Star, Bell, LogOut, Shield, History, ClipboardCheck, MessageSquareWarning, Trophy, Volume2, BookOpen, X } from 'lucide-react';
 
 interface SidebarProps {
   currentSection: Section;
@@ -48,11 +48,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
 
   return (
     <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl border-r border-slate-800`}>
-      <div className="p-6 border-b border-slate-800 bg-slate-950/20">
+      <div className="p-6 border-b border-slate-800 bg-slate-950/20 relative">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <span className="text-teal-400">Omni</span>English
         </h1>
         <p className="text-[10px] text-slate-500 mt-1.5 uppercase tracking-widest font-bold">AI Tutor Ecosystem</p>
+        
+        {/* Mobile close button */}
+        <button 
+          onClick={toggleSidebar}
+          className="lg:hidden absolute top-6 right-4 text-slate-400 hover:text-white"
+        >
+          <X size={20} />
+        </button>
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

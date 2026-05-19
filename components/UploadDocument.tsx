@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, BookOpen, FileText, Loader2, File as FileIcon, X, Plus } from 'lucide-react';
-import { AppMode } from '../App';
+import { AppMode } from '../types';
 
 interface UploadDocumentProps {
   onStart: (content: string, mode: AppMode) => void;

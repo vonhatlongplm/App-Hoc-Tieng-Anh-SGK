@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Login } from './components/Login';
 import MainLayout from './components/MainLayout';
+import { UploadDocument } from './components/UploadDocument';
 import { loadProgressFromFirebase, clearProgressFromFirebase } from './services/firebase';
-import { UserProgress } from './types';
+import { UserProgress, SectionId, AppMode } from './types';
 import { createInitialDetailedProgress } from './constants';
 
 const App: React.FC = () => {
@@ -56,13 +58,25 @@ const App: React.FC = () => {
     setCurrentScreen('MAIN');
   };
 
+  const [isStartingOver, setIsStartingOver] = useState(false);
   const handleStartOver = async () => {
-    if (currentUser?.uid) {
-      await clearProgressFromFirebase(currentUser.uid, currentUser.email, currentUser.name);
+    if (isStartingOver) return;
+    setIsStartingOver(true);
+    try {
+      if (currentUser?.uid) {
+        await clearProgressFromFirebase(currentUser.uid, currentUser.email, currentUser.name);
+      }
+      const defaultProg = createDefaultProgress(currentUser);
+      setProgress(defaultProg);
+      setCurrentScreen('UPLOAD');
+    } catch (e) {
+      console.error("Failed to clear progress", e);
+      const defaultProg = createDefaultProgress(currentUser);
+      setProgress(defaultProg);
+      setCurrentScreen('UPLOAD');
+    } finally {
+      setIsStartingOver(false);
     }
-    const defaultProg = createDefaultProgress(currentUser);
-    setProgress(defaultProg);
-    setCurrentScreen('UPLOAD');
   };
 
   const handleStartStudy = (content: string, mode: AppMode) => {
@@ -92,15 +106,18 @@ const App: React.FC = () => {
             <div className="space-y-4 relative z-0">
               <button 
                 onClick={handleResume}
-                className="w-full py-3.5 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition transform active:scale-[0.98] shadow-lg shadow-teal-600/20"
+                disabled={isStartingOver}
+                className="w-full py-3.5 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition transform active:scale-[0.98] shadow-lg shadow-teal-600/20 disabled:opacity-50"
               >
                 Tiếp tục học phần trước
               </button>
               <button 
                 onClick={handleStartOver}
-                className="w-full py-3.5 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition transform active:scale-[0.98]"
+                disabled={isStartingOver}
+                className="w-full py-3.5 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Bắt đầu mới (Xóa tiến độ cũ)
+                {isStartingOver && <Loader2 className="animate-spin w-4 h-4" />}
+                {isStartingOver ? 'Đang thiết lập lại...' : 'Bắt đầu mới (Xóa tiến độ cũ)'}
               </button>
             </div>
           </div>
