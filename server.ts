@@ -1,14 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 import multer from "multer";
 import { GEMINI_MODEL } from "./constants";
 
-let genAI: GoogleGenAI | null = null;
+let genAI: GoogleGenerativeAI | null = null;
 let fileManager: GoogleAIFileManager | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
@@ -17,14 +17,7 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
+    genAI = new GoogleGenerativeAI(key);
   }
   return genAI;
 };
@@ -83,23 +76,20 @@ async function startServer() {
       const { contents, systemInstruction } = req.body;
       
       const ai = getGenAI();
-      const result = await ai.models.generateContent({
+      const model = ai.getGenerativeModel({ 
         model: GEMINI_MODEL,
-        contents,
-        config: {
-          systemInstruction,
-        }
+        systemInstruction
       });
 
-      if (!result.text) {
-        const candidate = result.candidates?.[0];
-        if (candidate?.finishReason === 'SAFETY') {
-           return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với yêu cầu khác." });
-        }
-        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Lý do: " + (candidate?.finishReason || "không xác định") + ")" });
+      const result = await model.generateContent({ contents });
+      const response = await result.response;
+      const text = response.text();
+
+      if (!text) {
+        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. Vui lòng thử lại." });
       }
 
-      res.json({ text: result.text });
+      res.json({ text });
     } catch (err: any) {
       console.error("Generate Error Detail:", err);
       res.status(500).json({ 
