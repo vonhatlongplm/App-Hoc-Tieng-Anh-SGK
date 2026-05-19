@@ -317,8 +317,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const viewContainerRef = useRef<HTMLDivElement>(null);
 
-    const isDiagnosticTest = section === SectionId.PHONICS || (section as any) === 'tests'; // Adjusting to handle SectionId
-    const filteredMessages = useMemo(() => messages.filter(msg => (isDiagnosticTest ? msg.context?.section === 'tests' : (msg.context?.section === section && msg.context?.lessonNumber === lessonNumber))), [messages, section, lessonNumber, isDiagnosticTest]);
+    const isDiagnosticTest = section === SectionId.PHONICS || section === SectionId.TESTS;
+    const filteredMessages = useMemo(() => messages.filter(msg => (isDiagnosticTest ? msg.context?.section === SectionId.TESTS : (msg.context?.section === section && msg.context?.lessonNumber === lessonNumber))), [messages, section, lessonNumber, isDiagnosticTest]);
     
     // Auto-start lesson if empty
     const hasStartedRef = useRef(false);
@@ -463,14 +463,14 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', text: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
         addMessage(userMessage);
 
-        if (section === Section.TESTS) {
+        if (section === SectionId.TESTS) {
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: SectionId.TESTS, lessonNumber: 0 } });
                 setDiagnosticStep('writing');
             } else if (diagnosticStep === 'writing') {
                 setDiagnosticWritingAnswer(trimmedText);
-                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: 'tests', lessonNumber: 0 } });
+                addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Tuyệt vời. Bước cuối cùng, bạn hãy nhấn nút Micro và ghi âm giới thiệu bản thân bằng tiếng Anh trong khoảng 45-60 giây nhé.", type: 'text', timestamp: Date.now()+1, context: { section: SectionId.TESTS, lessonNumber: 0 } });
                 setDiagnosticStep('speaking');
             }
             setIsThinking(false);
@@ -487,9 +487,9 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         setIsProcessingAudio(true);
         const audioBase64 = await blobToBase64(audioBlob);
         
-        if (section === (SectionId.PHONICS) && diagnosticStep === 'speaking') { // Dummy check for diagnostic
+        if (section === SectionId.PHONICS && diagnosticStep === 'speaking') { // Dummy check for diagnostic
             setDiagnosticStep('submitting');
-            addMessage({ id: `msg-${Date.now()}`, role: 'user', text: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: 'tests', lessonNumber: 0 } });
+            addMessage({ id: `msg-${Date.now()}`, role: 'user', text: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: SectionId.TESTS, lessonNumber: 0 } });
             try {
                 const result = await geminiService.analyzeDiagnostic(diagnosticGrammarAnswers!, diagnosticWritingAnswer!, audioBase64, "Học viên");
                 onLessonComplete(section, lessonNumber, result);

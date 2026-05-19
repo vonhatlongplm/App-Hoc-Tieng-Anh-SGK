@@ -369,10 +369,12 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
               const placeholderWord: VocabularyWord = {
                   word: wordStr,
                   meaning: 'Đang tải nghĩa...',
+                  definition: '...',
+                  example: '...',
                   ipa: '',
                   partOfSpeech: '',
                   masteryLevel: 0,
-                  pronunciationAttempts: 0,
+                  pronunciationAttempts: [],
                   savedAt: Date.now(),
                   isBacklogged: false
               };
@@ -380,9 +382,11 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
               
               // Fetch the actual definition in the background
               lookupWord(wordStr).then(result => {
-                  const fullWordData = {
+                  const fullWordData: VocabularyWord = {
                       ...placeholderWord,
-                      meaning: result.meaning,
+                      meaning: result.meaning || result.definition,
+                      definition: result.definition,
+                      example: result.example,
                       ipa: result.ipa,
                       partOfSpeech: result.partOfSpeech,
                       irregularForms: result.irregularForms,
@@ -390,7 +394,7 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
                           phrase: c.phrase,
                           meaning: c.meaning,
                           masteryLevel: 0,
-                          pronunciationAttempts: 0
+                          pronunciationAttempts: []
                       }))
                   };
                   
@@ -942,10 +946,10 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                                 const newMastery = Math.min(4, actualMastery + 1);
 
                                 if (item.type === 'word') {
-                                    finalWordUpdate = { ...item.data, masteryLevel: newMastery as any, pronunciationAttempts: 0, isBacklogged: false };
+                                    finalWordUpdate = { ...item.data, masteryLevel: newMastery as any, pronunciationAttempts: [], isBacklogged: false };
                                 } else {
                                     const updatedCollocations = item.parentWord.collocations!.map(c => 
-                                        c.phrase === item.data.phrase ? { ...c, masteryLevel: newMastery as any, pronunciationAttempts: 0 } : c
+                                        c.phrase === item.data.phrase ? { ...c, masteryLevel: newMastery as any, pronunciationAttempts: [] } : c
                                     );
                                     finalWordUpdate = { ...item.parentWord, collocations: updatedCollocations, isBacklogged: false };
                                 }

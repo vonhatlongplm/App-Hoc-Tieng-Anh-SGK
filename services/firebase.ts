@@ -9,32 +9,11 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export interface Message {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-}
+import { UserProgress, Message, AppMode } from '../types';
 
-export interface SavedProgress {
-  uid: string;
-  email: string;
-  name: string;
-  documentContent: string;
-  appMode: AppMode;
-  messages: Message[];
+export interface SavedProgress extends UserProgress {
   updatedAt: number;
 }
-
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-testConnection();
 
 export async function simpleEmailLogin(email: string, name: string) {
   return { uid: email.toLowerCase(), email: email.toLowerCase(), name };
@@ -44,16 +23,11 @@ export async function logoutUser() {
   // Do nothing
 }
 
-export async function saveProgressToFirebase(uid: string, email: string, name: string, documentContent: string, appMode: AppMode, messages: Message[]) {
+export async function saveProgressToFirebase(uid: string, progress: UserProgress) {
   if (!uid) return;
   const progressRef = doc(db, 'progress', uid);
   const data: SavedProgress = {
-    uid,
-    email: email || '',
-    name: name || '',
-    documentContent,
-    appMode,
-    messages,
+    ...progress,
     updatedAt: Date.now()
   };
   await setDoc(progressRef, data);
@@ -71,8 +45,8 @@ export async function loadProgressFromFirebase(uid: string): Promise<SavedProgre
 
 export async function clearProgressFromFirebase(uid: string, email: string, name: string) {
   if (!uid) return;
-  // Just clear it by overwriting with empty
   const progressRef = doc(db, 'progress', uid);
+  // Default structure
   const data: SavedProgress = {
     uid,
     email: email || '',
@@ -80,7 +54,11 @@ export async function clearProgressFromFirebase(uid: string, email: string, name
     documentContent: '',
     appMode: 'LEARN_BOOK',
     messages: [],
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    completedLessons: 0,
+    totalLessons: 180,
+    scores: {},
+    estimatedTimeToB2: '6 tháng'
   };
   await setDoc(progressRef, data);
 }

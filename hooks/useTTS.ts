@@ -1,26 +1,26 @@
 
+export type TTSMode = 'ai' | 'browser';
+
 export const useTTS = () => {
+  const playTTS = async (text: string, mode: TTSMode = 'ai') => {
+    if (mode === 'browser') {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    // AI mode fallback to browser for now if server-side TTS is not fully implemented
+    // Or we can implement a call to /api/tts if it exists
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    window.speechSynthesis.speak(utterance);
+  };
+
   return {
-    speak: (text: string) => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      window.speechSynthesis.speak(utterance);
-    },
-    playTTS: (text: string) => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      window.speechSynthesis.speak(utterance);
-    },
-    stopTTS: () => {
-      window.speechSynthesis.cancel();
-    },
-    isSpeaking: false,
+    playTTS,
+    stopTTS: () => window.speechSynthesis.cancel(),
     isTtsLoading: false,
     ttsError: null
   };
 };
-
-export enum TTSMode {
-  NORMAL = 'normal',
-  SLOW = 'slow'
-}

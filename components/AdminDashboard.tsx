@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { StudentProfile as StudentProfileData } from '../services/storageService';
+import { StudentProfile } from '../types';
 import { Loader2, Users, ArrowLeft, BookOpen, Star, Lightbulb, RefreshCw, MessageSquareWarning, ChevronRight } from 'lucide-react';
 import { Section, LessonProgress, UserProgress, VocabularyWord, CorrectionEntry, SectionId } from '../types';
 import { createInitialDetailedProgress } from '../constants';
@@ -31,7 +31,7 @@ const SkillProgressCard: React.FC<{ section: SectionId, progress: ProcessedStude
 
     return (
         <div className="bg-slate-50 p-4 rounded-lg">
-            <h5 className="font-bold text-slate-800 uppercase">{section}</h5>
+            <h4 className="font-bold text-slate-800 uppercase">{section}</h4>
             <p className="text-sm text-slate-500 mb-2">Bài học gần nhất: <span className="font-semibold text-teal-700">{sectionProgress.currentLesson}</span></p>
             <div className="flex justify-between mb-1">
                 <span className="text-sm font-medium text-slate-700">Tiến độ</span>
@@ -143,7 +143,7 @@ const AdminDashboard: React.FC = () => {
 
     const processStudentData = (data: any[]): ProcessedStudentProfile[] => {
         return data.map(item => {
-            const profile = item.profile_data as StudentProfileData;
+            const profile = item.profile_data as StudentProfile;
             
             // Safety check: if profile data is missing or malformed, return a default structure
             if (!profile || typeof profile !== 'object') {
@@ -163,15 +163,15 @@ const AdminDashboard: React.FC = () => {
 
             return {
                 id: item.user_id,
-                name: profile.progress?.userName || item.user_id.split('@')[0],
+                name: (profile as any).name || item.user_id.split('@')[0],
                 email: item.user_id,
-                level: (profile.progress?.diagnosedLevel as ProcessedStudentProfile['level']) || ('Undiagnosed' as const),
+                level: (profile as any).diagnosedLevel || ('Undiagnosed' as const),
                 masteredWords: profile.vocabulary?.filter((v: VocabularyWord) => v.masteryLevel === 3).length || 0,
                 lastActivityTimestamp: new Date(item.updated_at).getTime(),
-                detailedProgress: profile.progress?.detailedProgress || createInitialDetailedProgress(),
-                hintUsageCount: profile.progress?.hintUsageCount || 0,
+                detailedProgress: (profile as any).detailedProgress || createInitialDetailedProgress(),
+                hintUsageCount: (profile as any).hintUsageCount || 0,
                 vocabulary: profile.vocabulary || [],
-                errorLog: profile.progress?.errorLog || [],
+                errorLog: (profile as any).errorLog || [],
             };
         }).sort((a, b) => b.lastActivityTimestamp - a.lastActivityTimestamp);
     };
