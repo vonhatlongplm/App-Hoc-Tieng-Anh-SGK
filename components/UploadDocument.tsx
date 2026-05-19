@@ -19,6 +19,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   const [unit, setUnit] = useState('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStart = () => {
@@ -36,10 +37,31 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
     onStart(JSON.stringify(finalItems), mode, { bookName: finalBookName, grade: finalGrade, unit: finalUnit });
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processFiles(files);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    processFiles(files);
+  };
 
+  const processFiles = async (files: FileList) => {
     if (items.length + files.length > 20) {
       alert("Bạn chỉ có thể tải lên tối đa 20 mục cùng lúc.");
       return;
@@ -55,10 +77,9 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
         const file = fileArray[i];
         
         // Vercel limit is 4.5MB, Base64 adds ~33% overhead.
-        // Approx limit for raw file is ~3MB to be safe for Vercel.
-        // For AI Studio environment, it can be higher.
-        if (file.size > 20 * 1024 * 1024) {
-          alert(`Tệp ${file.name} quá lớn (tối đa 20MB).`);
+        // For AI Studio environment, we can handle more, but let's be safe.
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`Tệp ${file.name} quá lớn (tối đa 10MB).`);
           continue;
         }
 
@@ -69,6 +90,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
         formData.append('name', file.name);
         formData.append('mimeType', file.type);
 
+        console.log(`Tải lên tệp: ${file.name}, type: ${file.type}, size: ${file.size}`);
         setUploadStatus(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
 
         const res = await fetch('/api/upload', {
@@ -85,10 +107,10 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
           } catch(e) {}
           
           if (res.status === 413) {
-            errMsg = "Tệp quá dung lượng cho phép của server (Gợi ý: Chia nhỏ tệp hoặc dùng tệp < 4MB if Vercel).";
+            errMsg = "Tệp quá dung lượng (Server Limit). Hãy thử tệp nhỏ hơn.";
           }
           
-          throw new Error(`Lỗi tải tệp ${file.name} (Status ${res.status}): ${errMsg}`);
+          throw new Error(`Lỗi tải tệp ${file.name}: ${errMsg}`);
         }
         
         const data = JSON.parse(responseText);
@@ -101,6 +123,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
       alert(`Tải lên tệp thất bại: ${err.message || 'Vui lòng thử lại'}`);
     } finally {
       setIsUploading(false);
+      setUploadStatus('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -205,10 +228,14 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
             )}
 
             <div className="space-y-4">
-               <button 
+               <div 
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || items.length >= 20}
-                className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center hover:bg-slate-50 hover:border-teal-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition cursor-pointer ${
+                  isDragging ? 'border-teal-500 bg-teal-50' : 'border-slate-300 hover:bg-slate-50 hover:border-teal-400'
+                } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                >
                  {isUploading ? (
                    <div className="flex flex-col items-center text-teal-600">
@@ -223,7 +250,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
                       <span className="text-sm">Hỗ trợ PDF, Word, Ảnh... Sách GK, Sách BT, Sách GV...</span>
                    </div>
                  )}
-               </button>
+               </div>
                <input 
                  type="file" 
                  ref={fileInputRef} 

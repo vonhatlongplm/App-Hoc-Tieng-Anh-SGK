@@ -17,7 +17,7 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenerativeAI(key);
+    genAI = new GoogleGenerativeAI(key.trim());
   }
   return genAI;
 };
@@ -67,14 +67,18 @@ async function startServer() {
       // Wait for the file to be processed and become ACTIVE
       let fileStatus = uploadedFile;
       let attempts = 0;
-      while (fileStatus.state === 'PROCESSING' && attempts < 10) {
+      console.log(`File uploaded: ${uploadedFile.name}, status: ${uploadedFile.state}`);
+      
+      while ((fileStatus.state === 'PROCESSING' || fileStatus.state === 'STATE_UNSPECIFIED') && attempts < 15) {
         attempts++;
-        await new Promise(resolve => setTimeout(resolve, 2000 * attempts));
+        const waitTime = Math.min(1000 * Math.pow(1.5, attempts), 5000); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         fileStatus = await fileManager.getFile(uploadedFile.name);
+        console.log(`Checking file status: ${fileStatus.name}, attempt ${attempts}, status: ${fileStatus.state}`);
       }
 
       if (fileStatus.state === 'FAILED') {
-          throw new Error("File processing failed on Gemini side.");
+          throw new Error(`File processing failed: ${fileStatus.error?.message || "Unknown error"}`);
       }
       
       // Cleanup temp file
@@ -104,7 +108,7 @@ async function startServer() {
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
         model: 'gemini-1.5-flash',
-        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 30000) : undefined
+        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: String(systemInstruction).substring(0, 30000) }] } : undefined
       });
       
       const safetySettings = [
@@ -112,7 +116,7 @@ async function startServer() {
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ];
+      ] as any;
 
       console.log("Calling Gemini API with model:", model.model);
 
@@ -120,13 +124,13 @@ async function startServer() {
         contents: contents.map((c: any) => ({
           role: c.role === 'model' ? 'model' : 'user',
           parts: c.parts.filter((p: any) => p.text || p.inlineData || p.fileData).map((p: any) => {
-            if (p.text !== undefined) return { text: String(p.text) };
+            if (p.text !== undefined) return { text: String(p.text).trim() };
             if (p.inlineData) return { inlineData: p.inlineData };
             if (p.fileData) return { fileData: p.fileData };
             return p;
           })
         })).filter((c: any) => c.parts.length > 0),
-        safetySettings: safetySettings as any
+        safetySettings
       });
       
       const response = await result.response;
@@ -150,7 +154,7 @@ async function startServer() {
     } catch (err: any) {
       console.error("Generate Error Detail:", err);
       // Try to extract a useful message for the client
-      const errorMsg = err.response?.error?.message || err.message || "Unknown generate error";
+      const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Unknown generate error";
       res.status(500).json({ 
         error: errorMsg,
         details: err.stack || ""

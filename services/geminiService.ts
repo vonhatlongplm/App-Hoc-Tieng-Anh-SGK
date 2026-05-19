@@ -58,7 +58,22 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
 
   const validHistory = firstUserIndex !== -1 ? historyParts.slice(firstUserIndex) : [];
   
-  const contents = [...validHistory, { role: 'user', parts: [{ text }] }];
+  // Ensure we don't have consecutive same roles, merging if necessary
+  const contents: any[] = [];
+  validHistory.forEach(h => {
+    if (contents.length > 0 && contents[contents.length - 1].role === h.role) {
+      contents[contents.length - 1].parts.push(...h.parts);
+    } else {
+      contents.push({ ...h });
+    }
+  });
+
+  // Add the new message, merging if the last role is 'user'
+  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+    contents[contents.length - 1].parts.push({ text });
+  } else {
+    contents.push({ role: 'user', parts: [{ text }] });
+  }
   
   let textbookContext = '';
   
