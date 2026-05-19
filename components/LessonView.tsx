@@ -454,6 +454,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
     };
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     const handleSendMessage = async (text: string, audio?: Blob) => {
         if (isThinking || isProcessingAudio || isReviewMode) return;
         const trimmedText = text.trim();
@@ -465,6 +467,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         addMessage(userMessage);
 
         if (section === SectionId.TESTS) {
+            // ... (diagnostic logic stays same)
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
                 addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: SectionId.TESTS, lessonNumber: 0 } });
@@ -478,9 +481,48 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             return;
         }
         
-        const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any, documentContent);
-        addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
-        setIsThinking(false);
+        try {
+            const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any, documentContent);
+            addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+        } catch (e: any) {
+            setToastMessage({ message: "Gia sư gặp lỗi khi phản hồi. Vui lòng thử lại.", type: "error" });
+        } finally {
+            setIsThinking(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            setToastMessage({ message: "Vui lòng chỉ tải lên tệp hình ảnh.", type: "error" });
+            return;
+        }
+
+        setIsThinking(true);
+        try {
+            const base64 = await blobToBase64(file);
+            const userMessage: Message = { 
+                id: `msg-img-${Date.now()}`, 
+                role: 'user', 
+                text: "Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.", 
+                type: 'text', 
+                timestamp: Date.now(), 
+                imageUrls: [`data:${file.type};base64,${base64}`],
+                context: { section, lessonNumber } 
+            };
+            addMessage(userMessage);
+
+            const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
+            const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
+            addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+        } catch (e: any) {
+            setToastMessage({ message: "Không thể xử lý hình ảnh này.", type: "error" });
+        } finally {
+            setIsThinking(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
     const handleSendAudio = async (audioBlob: Blob) => {
@@ -640,7 +682,24 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
 
             <div className="border-t border-slate-200 bg-white/90 backdrop-blur-md p-3 md:p-6 pb-6 md:pb-8 landscape:p-2 landscape:pb-2 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 <div className="flex items-end gap-3 w-full mx-auto">
-                    <AudioRecorder onAudioRecorded={handleSendAudio} isProcessing={isProcessingAudio} disabled={isReviewMode} />
+                    <div className="flex flex-col gap-2">
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isReviewMode || isThinking}
+                            className="p-3 rounded-2xl bg-white border-2 border-slate-200 text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all shadow-sm"
+                            title="Tải ảnh bài học"
+                        >
+                            <Paperclip size={20} />
+                        </button>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleImageUpload} 
+                            className="hidden" 
+                            accept="image/*" 
+                        />
+                        <AudioRecorder onAudioRecorded={handleSendAudio} isProcessing={isProcessingAudio} disabled={isReviewMode} />
+                    </div>
                     <div className="relative flex-1 group">
                         <textarea 
                             value={input} 
