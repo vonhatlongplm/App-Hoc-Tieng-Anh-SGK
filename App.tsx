@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { Login } from './components/Login';
 import MainLayout from './components/MainLayout';
 import { UploadDocument } from './components/UploadDocument';
-import { loadProgressFromFirebase, clearProgressFromFirebase } from './services/firebase';
+import { loadProgressFromFirebase, clearProgressFromFirebase, saveProgressToFirebase } from './services/firebase';
 import { UserProgress, SectionId, AppMode } from './types';
 import { createInitialDetailedProgress } from './constants';
 
@@ -62,7 +62,7 @@ const App: React.FC = () => {
         
         setProgress(mergedProgress);
         
-        if (saved.documentContent) {
+        if (saved.documentContent || (saved.uploadedMaterials && saved.uploadedMaterials.length > 0)) {
           setCurrentScreen('RESUME_PROMPT');
         } else {
           setCurrentScreen('UPLOAD');
@@ -105,7 +105,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartStudy = (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => {
+  const handleStartStudy = async (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => {
     if (progress) {
       const newMaterial = {
         id: `mat-${Date.now()}`,
@@ -123,6 +123,9 @@ const App: React.FC = () => {
         currentMaterialId: newMaterial.id
       };
       setProgress(updated);
+      if (currentUser?.uid) {
+        await saveProgressToFirebase(currentUser.uid, updated);
+      }
       setCurrentScreen('MAIN');
     } else if (currentUser) {
       // Fallback if progress was lost
@@ -141,6 +144,9 @@ const App: React.FC = () => {
         currentMaterialId: newMaterial.id
       };
       setProgress(updated);
+      if (currentUser.uid) {
+        await saveProgressToFirebase(currentUser.uid, updated);
+      }
       setCurrentScreen('MAIN');
     }
   };

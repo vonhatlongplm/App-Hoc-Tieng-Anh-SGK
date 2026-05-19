@@ -34,6 +34,7 @@ export interface UserProgress {
   hintUsageCount?: number;
   uploadedMaterials: TextbookMetadata[];
   currentMaterialId?: string;
+  currentSection?: SectionId;
 }
 
 export interface StudentProfile extends UserProgress {

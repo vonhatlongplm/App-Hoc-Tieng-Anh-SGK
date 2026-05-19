@@ -75,13 +75,29 @@ async function startServer() {
     try {
       const { contents, systemInstruction } = req.body;
       
+      if (!contents || !Array.isArray(contents)) {
+        return res.status(400).json({ error: "Invalid contents format" });
+      }
+
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
         model: GEMINI_MODEL,
-        systemInstruction: systemInstruction ? { role: "system", parts: [{ text: systemInstruction }] } : undefined
+        systemInstruction: systemInstruction || undefined
       });
 
-      const result = await model.generateContent({ contents });
+      // Relax safety settings for educational purposes
+      const safetySettings = [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      ];
+
+      const result = await model.generateContent({ 
+        contents,
+        safetySettings: safetySettings as any
+      });
+      
       const response = await result.response;
       
       // Handle safety or other finish reasons
@@ -89,22 +105,24 @@ async function startServer() {
       if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
          console.warn("AI Finish Reason:", candidate.finishReason);
          if (candidate.finishReason === 'SAFETY') {
-            return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với yêu cầu khác." });
+            return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với nội dung khác lành mạnh hơn." });
          }
       }
 
       const text = response.text();
 
       if (!text) {
-        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. Vui lòng thử lại." });
+        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Empty response)" });
       }
 
       res.json({ text });
     } catch (err: any) {
       console.error("Generate Error Detail:", err);
+      // Log more info for debugging
+      const errorMsg = err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: err.message,
-        stack: process.env.NODE_ENV !== "production" ? err.stack : undefined
+        error: errorMsg,
+        details: err.statusText || err.reason || errorMsg
       });
     }
   });

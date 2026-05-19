@@ -366,7 +366,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         );
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
-                        setToastMessage({ message: "Gia sư gặp lỗi khi phản hồi. Vui lòng thử lại.", type: "error" });
+                        console.error("AI Error:", e);
+                        setToastMessage({ message: `Lỗi: ${e.message || "Gia sư gặp lỗi khi phản hồi"}`, type: "error" });
                     } finally {
                         setIsThinking(false);
                     }
@@ -510,7 +511,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any, documentContent);
             addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
         } catch (e: any) {
-            setToastMessage({ message: "Gia sư gặp lỗi khi phản hồi. Vui lòng thử lại.", type: "error" });
+            console.error("AI Send Message Error:", e);
+            setToastMessage({ message: `Lỗi: ${e.message || "Gia sư gặp lỗi khi phản hồi"}`, type: "error" });
         } finally {
             setIsThinking(false);
         }

@@ -21,7 +21,7 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
-  const [currentSection, setCurrentSection] = useState<SectionId>(SectionId.LIBRARY);
+  const [currentSection, setCurrentSection] = useState<SectionId>(initialProgress.currentSection || SectionId.LIBRARY);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default false for mobile
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
@@ -73,11 +73,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   const handleSelectMaterial = (id: string) => {
     const mat = progress.uploadedMaterials.find(m => m.id === id);
     if (mat) {
+      const targetSection = progress.appMode === 'PRACTICE_EXAM' ? SectionId.TESTS : SectionId.RESEARCH;
       handleUpdateProgress({ 
         currentMaterialId: id,
-        documentContent: mat.content
+        documentContent: mat.content,
+        currentSection: targetSection
       });
-      setCurrentSection(SectionId.RESEARCH);
+      setCurrentSection(targetSection);
       setToast({ message: `Đang tải: ${mat.bookName} - ${mat.unit}`, type: 'success' });
     }
   };
@@ -164,7 +166,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
 
       <Sidebar 
         currentSection={currentSection} 
-        setSection={setCurrentSection} 
+        setSection={(sec) => {
+          setCurrentSection(sec);
+          handleUpdateProgress({ currentSection: sec });
+        }} 
         isOpen={isSidebarOpen} 
         toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         words={progress.vocabulary || []}
