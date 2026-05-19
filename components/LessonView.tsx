@@ -352,7 +352,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             startLesson();
         } else if (filteredMessages.length > 0 && !isReviewMode && !isThinking) {
             const lastMsg = filteredMessages[filteredMessages.length - 1];
-            if (lastMsg.role === 'user' && lastMsg.id !== lastRespondedMsgId.current) {
+            if (lastMsg.role === 'user' && !lastMsg.text.includes("[Đã gửi bài ghi âm") && lastMsg.id !== lastRespondedMsgId.current) {
                 lastRespondedMsgId.current = lastMsg.id;
                 // Trigger AI response for external user messages (like from ResearchView buttons)
                 const getReply = async () => {
@@ -367,6 +367,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
                     } catch (e: any) {
                         console.error("AI Error:", e);
+                        // If it fails, we should clear the lastRespondedMsgId so the user can retry by re-adding or we can provide a retry button
+                        lastRespondedMsgId.current = null; 
                         setToastMessage({ message: `Lỗi: ${e.message || "Gia sư gặp lỗi khi phản hồi"}`, type: "error" });
                     } finally {
                         setIsThinking(false);
@@ -375,7 +377,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 getReply();
             }
         }
-    }, [filteredMessages.length, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking, filteredMessages, documentContent]);
+    }, [filteredMessages, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking, documentContent]);
 
     const prevMsgLength = useRef(filteredMessages.length);
     useEffect(() => { 

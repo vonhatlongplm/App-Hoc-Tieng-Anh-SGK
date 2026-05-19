@@ -1,14 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import fs from "fs";
 import os from "os";
 import multer from "multer";
 import { GEMINI_MODEL } from "./constants";
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: any = null;
 let fileManager: GoogleAIFileManager | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
@@ -17,7 +17,14 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenerativeAI(key);
+    genAI = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return genAI;
 };
@@ -80,11 +87,7 @@ async function startServer() {
       }
 
       const ai = getGenAI();
-      const model = ai.getGenerativeModel({ 
-        model: GEMINI_MODEL,
-        systemInstruction: systemInstruction || undefined
-      });
-
+      
       // Relax safety settings for educational purposes
       const safetySettings = [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -93,12 +96,22 @@ async function startServer() {
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ];
 
-      const result = await model.generateContent({ 
-        contents,
-        safetySettings: safetySettings as any
+      const response = await ai.models.generateContent({ 
+        model: GEMINI_MODEL,
+        contents: contents.map((c: any) => ({
+          role: c.role === 'model' ? 'model' : 'user',
+          parts: c.parts.map((p: any) => {
+            if (p.text) return { text: p.text };
+            if (p.inlineData) return { inlineData: p.inlineData };
+            if (p.fileData) return { fileData: p.fileData };
+            return p;
+          })
+        })),
+        config: {
+          systemInstruction: systemInstruction || undefined,
+          safetySettings: safetySettings as any
+        }
       });
-      
-      const response = await result.response;
       
       // Handle safety or other finish reasons
       const candidate = response.candidates?.[0];
@@ -109,7 +122,16 @@ async function startServer() {
          }
       }
 
-      const text = response.text();
+      let text = '';
+      try {
+        text = response.text || '';
+      } catch (e) {
+        // Fallback for some response structures
+        const candidate = response.candidates?.[0];
+        if (candidate?.content?.parts?.[0]?.text) {
+          text = candidate.content.parts[0].text;
+        }
+      }
 
       if (!text) {
         return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Empty response)" });

@@ -5,7 +5,16 @@ export const generateContent = async (contents: any, systemInstruction: string) 
      headers: { 'Content-Type': 'application/json' },
      body: JSON.stringify({ contents, systemInstruction })
   });
-  if (!res.ok) throw new Error("AI Generation failed");
+  
+  if (!res.ok) {
+    let errorDetail = "AI Generation failed";
+    try {
+      const errorJson = await res.json();
+      errorDetail = errorJson.error || errorJson.details || errorDetail;
+    } catch (e) {}
+    throw new Error(errorDetail);
+  }
+  
   return await res.json();
 };
 

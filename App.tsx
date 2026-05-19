@@ -117,19 +117,24 @@ const App: React.FC = () => {
       };
       
       const updatedMaterials = [...(progress.uploadedMaterials || []), newMaterial];
-      const updated = { 
+      const updated: UserProgress = { 
         ...progress, 
         documentContent: content, 
         appMode: mode,
         uploadedMaterials: updatedMaterials,
         currentMaterialId: newMaterial.id,
-        currentSection: targetSection
+        currentSection: targetSection,
+        updatedAt: Date.now()
       };
+      
       setProgress(updated);
+      // Wait for state to be set conceptually or just navigate immediately since progress is now non-null
       setCurrentScreen('MAIN');
       
       if (currentUser?.uid) {
-        saveProgressToFirebase(currentUser.uid, updated).catch(console.error);
+        saveProgressToFirebase(currentUser.uid, updated).catch(err => {
+          console.error("Failed to save start progress:", err);
+        });
       }
     } else if (currentUser) {
       // Fallback if progress was lost
@@ -140,13 +145,14 @@ const App: React.FC = () => {
         content,
         uploadDate: Date.now()
       };
-      const updated = { 
+      const updated: UserProgress = { 
         ...defaultProg, 
         documentContent: content, 
         appMode: mode,
         uploadedMaterials: [newMaterial],
         currentMaterialId: newMaterial.id,
-        currentSection: targetSection
+        currentSection: targetSection,
+        updatedAt: Date.now()
       };
       setProgress(updated);
       setCurrentScreen('MAIN');
