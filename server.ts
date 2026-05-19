@@ -55,14 +55,27 @@ async function startServer() {
       
       const { file: uploadedFile } = uploadResult;
       
+      // Wait for the file to be processed and become ACTIVE
+      let fileStatus = uploadedFile;
+      let attempts = 0;
+      while (fileStatus.state === 'PROCESSING' && attempts < 10) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempts));
+        fileStatus = await fileManager.getFile(uploadedFile.name);
+      }
+
+      if (fileStatus.state === 'FAILED') {
+          throw new Error("File processing failed on Gemini side.");
+      }
+      
       // Cleanup temp file
       if (fs.existsSync(file.path)) {
           fs.unlinkSync(file.path);
       }
       
       res.json({
-        fileUri: uploadedFile.uri,
-        mimeType: uploadedFile.mimeType || mimeType,
+        fileUri: fileStatus.uri,
+        mimeType: fileStatus.mimeType || mimeType,
         name: name || file.originalname
       });
     } catch (err: any) {
@@ -81,8 +94,8 @@ async function startServer() {
 
       const ai = getGenAI();
       const model = ai.getGenerativeModel({ 
-        model: GEMINI_MODEL.includes('gemini-') ? GEMINI_MODEL : 'gemini-1.5-flash',
-        systemInstruction: systemInstruction || undefined
+        model: 'gemini-1.5-flash',
+        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
       });
       
       // Relax safety settings for educational purposes
@@ -93,11 +106,14 @@ async function startServer() {
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
       ];
 
+      console.log("Calling Gemini API with model:", model.model);
+
       const result = await model.generateContent({ 
         contents: contents.map((c: any) => ({
           role: c.role === 'model' ? 'model' : 'user',
           parts: c.parts.map((p: any) => {
-            if (p.text) return { text: p.text };
+            // Ensure part structure is exactly what SDK expects
+            if (p.text !== undefined) return { text: p.text };
             if (p.inlineData) return { inlineData: p.inlineData };
             if (p.fileData) return { fileData: p.fileData };
             return p;
@@ -126,8 +142,10 @@ async function startServer() {
       res.json({ text });
     } catch (err: any) {
       console.error("Generate Error Detail:", err);
+      // Try to extract a useful message for the client
+      const errorMsg = err.response?.error?.message || err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: err.message || "Unknown generate error",
+        error: errorMsg,
         details: err.stack || ""
       });
     }

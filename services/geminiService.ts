@@ -7,10 +7,16 @@ export const generateContent = async (contents: any, systemInstruction: string) 
   });
   
   if (!res.ok) {
-    let errorDetail = "AI Generation failed";
+    let errorDetail = `Lỗi kết nối AI (HTTP ${res.status})`;
     try {
-      const errorJson = await res.json();
-      errorDetail = errorJson.error || errorJson.details || errorDetail;
+      const text = await res.text();
+      try {
+        const errorJson = JSON.parse(text);
+        errorDetail = errorJson.error || errorJson.details || errorDetail;
+      } catch {
+        // Not JSON
+        errorDetail = text.slice(0, 200) || errorDetail;
+      }
     } catch (e) {}
     throw new Error(errorDetail);
   }
