@@ -13,9 +13,10 @@ interface SidebarProps {
   isDiagnosed: boolean;
   onLogout: () => void;
   isTeacher: boolean;
+  onBackToUpload?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, toggleSidebar, words, isDiagnosed, onLogout, isTeacher }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, toggleSidebar, words, isDiagnosed, onLogout, isTeacher, onBackToUpload }) => {
   const hasBacklog = words.some(w => w.isBacklogged);
   
   const baseMenuItems = [
@@ -46,10 +47,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
   }
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-teal-900 text-white flex flex-col transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl`}>
-      <div className="p-6 border-b border-teal-800">
-        <h1 className="text-2xl font-bold serif">Aptis<span className="text-teal-400">Master</span></h1>
-        <p className="text-xs text-teal-300 mt-1">{isTeacher ? 'Cổng Giáo viên' : 'Luyện thi B2 cùng AI'}</p>
+    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl border-r border-slate-800`}>
+      <div className="p-6 border-b border-slate-800 bg-slate-950/20">
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <span className="text-teal-400">Omni</span>English
+        </h1>
+        <p className="text-[10px] text-slate-500 mt-1.5 uppercase tracking-widest font-bold">AI Tutor Ecosystem</p>
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -82,10 +85,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
         })}
 
         {/* Separator and Logout Button Integrated into Scroll */}
-        <div className="pt-4 mt-4 border-t border-teal-800/50">
+        <div className="pt-4 mt-4 border-t border-slate-800/50 space-y-1">
+          {onBackToUpload && (
+            <button
+                onClick={onBackToUpload}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-300 hover:bg-teal-500/10 hover:text-teal-400 transition-all duration-200 group"
+            >
+                <BookOpen size={18} className="group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm">Đổi tài liệu học</span>
+            </button>
+          )}
+          
           <button
               onClick={onLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-teal-300 hover:bg-red-500/10 hover:text-red-300 transition-all duration-200 group"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 group"
           >
               <LogOut size={18} className="group-hover:rotate-12 transition-transform" />
               <span className="font-bold text-sm">Đăng xuất</span>

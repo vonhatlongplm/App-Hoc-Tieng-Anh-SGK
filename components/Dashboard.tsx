@@ -52,8 +52,8 @@ const Dashboard: React.FC<DashboardProps> = ({ progress, onStartLesson }) => {
   return (
     <div className="p-6 space-y-6 animate-in fade-in duration-500 h-full overflow-y-auto">
       <header className="mb-8">
-        <h2 className="text-3xl font-bold text-slate-800 serif">Hành trình B2 của bạn</h2>
-        <p className="text-slate-500 mt-2">Đánh giá năng lực hiện tại và lộ trình cá nhân hóa của bạn.</p>
+        <h2 className="text-3xl font-bold text-slate-800 serif">Giáo trình của bạn</h2>
+        <p className="text-slate-500 mt-2">Nghiên cứu tài liệu và lộ trình học tập tối ưu.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

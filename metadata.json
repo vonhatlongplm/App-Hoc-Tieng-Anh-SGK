@@ -1,5 +1,5 @@
 {
-  "name": "Omni English Tutor",
+  "name": "OmniEnglish",
   "description": "Ứng dụng giúp học sinh tải lên bất kỳ tài liệu nào (sách, giáo trình, đề thi) và AI sẽ đóng vai trò gia sư giảng giải hoặc chấm thi từng bước một.",
   "requestFramePermissions": [
     "microphone"

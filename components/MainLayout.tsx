@@ -12,9 +12,10 @@ import { saveProgressToFirebase } from '../services/firebase';
 
 interface MainLayoutProps {
   initialProgress: UserProgress;
+  onBackToUpload: () => void;
 }
 
-const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress }) => {
+const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
   const [currentSection, setCurrentSection] = useState<SectionId>(SectionId.ROADMAP);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -98,9 +99,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress }) => {
         isDiagnosed={progress.diagnosedLevel !== 'Undiagnosed'}
         onLogout={() => window.location.reload()}
         isTeacher={progress.isAdmin}
+        onBackToUpload={onBackToUpload}
       />
       
-      <main className="flex-1 relative overflow-hidden flex flex-col">
+      <main className="flex-1 relative overflow-hidden flex flex-col lg:pl-64">
         {renderContent()}
       </main>
 

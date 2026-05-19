@@ -37,8 +37,8 @@ export interface StudentProfile extends UserProgress {
 }
 
 export enum SectionId {
-  ROADMAP = 'Lộ trình',
-  TESTS = 'Kiểm tra',
+  ROADMAP = 'Nghiên cứu giáo trình',
+  TESTS = 'Luyện giải đề thi',
   VOCABULARY = 'Học từ vựng',
   GRAMMAR = 'Ngữ pháp',
   LISTENING = 'Luyện nghe',

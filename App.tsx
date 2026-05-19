@@ -7,7 +7,7 @@ import { UserProgress } from './types';
 import { createInitialDetailedProgress } from './constants';
 
 const App: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'RESUME_PROMPT' | 'MAIN'>('LOGIN');
+  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'RESUME_PROMPT' | 'UPLOAD' | 'MAIN'>('LOGIN');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState<UserProgress | null>(null);
@@ -33,17 +33,20 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       const saved = await loadProgressFromFirebase(user.uid);
-      if (saved && saved.uid) {
+      if (saved && saved.uid && saved.documentContent) {
         setProgress(saved);
         setCurrentScreen('RESUME_PROMPT');
+      } else if (saved && saved.uid) {
+        setProgress(saved);
+        setCurrentScreen('UPLOAD');
       } else {
         setProgress(createDefaultProgress(user));
-        setCurrentScreen('MAIN');
+        setCurrentScreen('UPLOAD');
       }
     } catch (e) {
       console.error("Failed to load progress", e);
       setProgress(createDefaultProgress(user));
-      setCurrentScreen('MAIN');
+      setCurrentScreen('UPLOAD');
     } finally {
       setIsSyncing(false);
     }
@@ -57,8 +60,17 @@ const App: React.FC = () => {
     if (currentUser?.uid) {
       await clearProgressFromFirebase(currentUser.uid, currentUser.email, currentUser.name);
     }
-    setProgress(createDefaultProgress(currentUser));
-    setCurrentScreen('MAIN');
+    const defaultProg = createDefaultProgress(currentUser);
+    setProgress(defaultProg);
+    setCurrentScreen('UPLOAD');
+  };
+
+  const handleStartStudy = (content: string, mode: AppMode) => {
+    if (progress) {
+      const updated = { ...progress, documentContent: content, appMode: mode };
+      setProgress(updated);
+      setCurrentScreen('MAIN');
+    }
   };
 
   return (
@@ -95,8 +107,12 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {currentScreen === 'UPLOAD' && (
+        <UploadDocument onStart={handleStartStudy} />
+      )}
+
       {currentScreen === 'MAIN' && progress && (
-        <MainLayout initialProgress={progress} />
+        <MainLayout initialProgress={progress} onBackToUpload={() => setCurrentScreen('UPLOAD')} />
       )}
     </div>
   );
