@@ -33,6 +33,7 @@ const App: React.FC = () => {
     detailedProgress: createInitialDetailedProgress(),
     vocabulary: [],
     messages: [],
+    uploadedMaterials: [],
     appMode: 'LEARN_BOOK',
     documentContent: '',
     updatedAt: Date.now()
@@ -54,6 +55,8 @@ const App: React.FC = () => {
           scores: { ...defaultProg.scores, ...(saved.scores || {}) },
           detailedProgress: { ...defaultProg.detailedProgress, ...(saved.detailedProgress || {}) },
           vocabulary: saved.vocabulary || [],
+          uploadedMaterials: saved.uploadedMaterials || [],
+          currentMaterialId: saved.currentMaterialId || '',
           messages: saved.messages || []
         };
         
@@ -102,15 +105,41 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartStudy = (content: string, mode: AppMode) => {
+  const handleStartStudy = (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => {
     if (progress) {
-      const updated = { ...progress, documentContent: content, appMode: mode };
+      const newMaterial = {
+        id: `mat-${Date.now()}`,
+        ...metadata,
+        content,
+        uploadDate: Date.now()
+      };
+      
+      const updatedMaterials = [...(progress.uploadedMaterials || []), newMaterial];
+      const updated = { 
+        ...progress, 
+        documentContent: content, 
+        appMode: mode,
+        uploadedMaterials: updatedMaterials,
+        currentMaterialId: newMaterial.id
+      };
       setProgress(updated);
       setCurrentScreen('MAIN');
     } else if (currentUser) {
       // Fallback if progress was lost
       const defaultProg = createDefaultProgress(currentUser);
-      const updated = { ...defaultProg, documentContent: content, appMode: mode };
+      const newMaterial = {
+        id: `mat-${Date.now()}`,
+        ...metadata,
+        content,
+        uploadDate: Date.now()
+      };
+      const updated = { 
+        ...defaultProg, 
+        documentContent: content, 
+        appMode: mode,
+        uploadedMaterials: [newMaterial],
+        currentMaterialId: newMaterial.id
+      };
       setProgress(updated);
       setCurrentScreen('MAIN');
     }

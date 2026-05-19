@@ -44,7 +44,8 @@ Xưng hô: Thầy/Cô và gọi học sinh là Em.`;
     systemInstruction = `Bạn là Giám thị và Người chấm điểm Tiếng Anh. Sử dụng tài liệu đề thi đã tải lên để kiểm tra học sinh từng bước một.`;
   }
   
-  return await generateContent(contents, systemInstruction);
+  const result = await generateContent(contents, systemInstruction);
+  return result.text;
 };
 
 export const analyzePronunciation = async (audioBase64: string, targetText: string) => {

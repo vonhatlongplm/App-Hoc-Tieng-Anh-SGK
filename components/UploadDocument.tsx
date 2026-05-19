@@ -3,7 +3,7 @@ import { Upload, BookOpen, FileText, Loader2, File as FileIcon, X, Plus } from '
 import { AppMode } from '../types';
 
 interface UploadDocumentProps {
-  onStart: (content: string, mode: AppMode) => void;
+  onStart: (content: string, mode: AppMode, metadata: { bookName: string, grade: string, unit: string }) => void;
 }
 
 type UploadItem = 
@@ -14,6 +14,9 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [textInput, setTextInput] = useState('');
   const [mode, setMode] = useState<AppMode>('LEARN_BOOK');
+  const [bookName, setBookName] = useState('');
+  const [grade, setGrade] = useState('');
+  const [unit, setUnit] = useState('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -24,9 +27,13 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
       finalItems.push({ type: 'text', content: textInput.trim() });
     }
     if (finalItems.length === 0) return;
+    if (!bookName.trim() || !unit.trim()) {
+      alert("Vui lòng nhập Tên sách và Unit để dễ dàng quản lý trong thư viện.");
+      return;
+    }
     
     // Convert logic to string for backward compatibility
-    onStart(JSON.stringify(finalItems), mode);
+    onStart(JSON.stringify(finalItems), mode, { bookName: bookName.trim(), grade: grade.trim(), unit: unit.trim() });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +130,45 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
 
         <div className="w-full bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden text-left p-8">
           
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">
+                Tên sách
+              </label>
+              <input 
+                type="text"
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="Global Success, Friends Plus..."
+                value={bookName}
+                onChange={(e) => setBookName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">
+                Lớp
+              </label>
+              <input 
+                type="text"
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="Lớp 10, Lớp 11..."
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wider">
+                Unit / Bài học
+              </label>
+              <input 
+                type="text"
+                className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="Unit 1, Lesson 1..."
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="mb-8">
             <label className="block text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wider">
               Nội dung bài học / Đề thi

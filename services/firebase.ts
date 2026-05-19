@@ -53,6 +53,7 @@ export async function clearProgressFromFirebase(uid: string, email: string, name
     appMode: 'LEARN_BOOK',
     messages: [],
     vocabulary: [],
+    uploadedMaterials: [],
     diagnosedLevel: 'Undiagnosed',
     detailedProgress: {
         vocab: 0,

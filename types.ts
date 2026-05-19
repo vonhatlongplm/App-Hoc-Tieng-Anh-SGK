@@ -32,6 +32,8 @@ export interface UserProgress {
   vocabulary: VocabularyWord[];
   isAdmin?: boolean;
   hintUsageCount?: number;
+  uploadedMaterials: TextbookMetadata[];
+  currentMaterialId?: string;
 }
 
 export interface StudentProfile extends UserProgress {
@@ -39,8 +41,18 @@ export interface StudentProfile extends UserProgress {
   wordCount: number;
 }
 
+export interface TextbookMetadata {
+  id: string;
+  bookName: string;
+  grade: string;
+  unit: string;
+  content: string;
+  uploadDate: number;
+}
+
 export enum SectionId {
-  ROADMAP = 'Nghiên cứu giáo trình',
+  LIBRARY = 'Thư viện giáo trình',
+  RESEARCH = 'Phòng nghiên cứu',
   TESTS = 'Luyện giải đề thi',
   VOCABULARY = 'Học từ vựng',
   GRAMMAR = 'Ngữ pháp',

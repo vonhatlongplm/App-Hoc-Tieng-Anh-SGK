@@ -5,12 +5,14 @@ import LessonView from './LessonView';
 import Vocabulary from './Vocabulary';
 import AdminDashboard from './AdminDashboard';
 import SyllabusView from './SyllabusView';
+import { LibraryView } from './LibraryView';
+import { ResearchView } from './ResearchView';
 import { SectionId, UserProgress, VocabularyWord, Message } from '../types';
 import { createInitialDetailedProgress } from '../constants';
 import Toast from './Toast';
 import { saveProgressToFirebase } from '../services/firebase';
 
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Loader2 } from 'lucide-react';
 
 interface MainLayoutProps {
   initialProgress: UserProgress;
@@ -19,7 +21,7 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
-  const [currentSection, setCurrentSection] = useState<SectionId>(SectionId.ROADMAP);
+  const [currentSection, setCurrentSection] = useState<SectionId>(SectionId.LIBRARY);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default false for mobile
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
@@ -60,29 +62,57 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
     handleUpdateProgress({ vocabulary: newVocab });
   };
 
+  const handleDeleteMaterial = (id: string) => {
+    const updated = (progress.uploadedMaterials || []).filter(m => m.id !== id);
+    handleUpdateProgress({ uploadedMaterials: updated });
+    if (progress.currentMaterialId === id) {
+      handleUpdateProgress({ currentMaterialId: updated[0]?.id || '' });
+    }
+  };
+
+  const handleSelectMaterial = (id: string) => {
+    const mat = progress.uploadedMaterials.find(m => m.id === id);
+    if (mat) {
+      handleUpdateProgress({ 
+        currentMaterialId: id,
+        documentContent: mat.content
+      });
+      setCurrentSection(SectionId.RESEARCH);
+      setToast({ message: `Đang tải: ${mat.bookName} - ${mat.unit}`, type: 'success' });
+    }
+  };
+
   const renderContent = () => {
     switch (currentSection) {
-      case SectionId.ROADMAP:
-        return <Dashboard progress={progress} onStartLesson={(section) => setCurrentSection(section)} />;
-      case SectionId.MY_VOCABULARY:
-        return <Vocabulary words={progress.vocabulary || []} onUpdateWord={handleUpdateWord} onDelete={handleDeleteWord} />;
-      case SectionId.ADMIN:
-        return <AdminDashboard />;
-      case SectionId.GRAMMAR:
+      case SectionId.LIBRARY:
+        return (
+          <LibraryView 
+            materials={progress.uploadedMaterials || []} 
+            onSelectMaterial={handleSelectMaterial}
+            onDeleteMaterial={handleDeleteMaterial}
+            onAddNew={onBackToUpload}
+          />
+        );
+      case SectionId.RESEARCH:
       case SectionId.VOCABULARY:
-      case SectionId.LISTENING:
+      case SectionId.GRAMMAR:
       case SectionId.READING:
+      case SectionId.LISTENING:
       case SectionId.WRITING:
       case SectionId.SPEAKING:
-        // For simplicity, if we don't have a specific lesson selected, show syllabus
-        // In a real app we'd have a nested state for lesson number
+        const currentMat = progress.uploadedMaterials?.find(m => m.id === progress.currentMaterialId) || progress.uploadedMaterials?.[0];
+        if (!currentMat) return (
+             <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                 <Loader2 className="animate-spin text-teal-600 mb-4" />
+                 <p className="text-slate-500">Mời em chọn một giáo trình trong thư viện để bắt đầu nghiên cứu nhé!</p>
+                 <button onClick={() => setCurrentSection(SectionId.LIBRARY)} className="mt-4 text-teal-600 font-bold hover:underline">Vào Thư viện</button>
+             </div>
+        );
         return (
-          <LessonView 
-            section={currentSection}
-            lessonNumber={1}
-            lessonTitle="Bài học trọng tâm"
+          <ResearchView 
+            material={currentMat}
+            currentSection={currentSection}
             messages={progress.messages || []}
-            documentContent={progress.documentContent}
             addMessage={(msg) => {
                 const newMessages = [...(progress.messages || []), msg];
                 handleUpdateProgress({ messages: newMessages });
@@ -90,16 +120,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             setMessages={(msgs) => handleUpdateProgress({ messages: msgs as Message[] })}
             savedVocabulary={progress.vocabulary || []}
             onSaveWord={(wordData) => handleSaveWord(wordData as VocabularyWord)}
-            onSaveCollocation={(c) => console.log("Save col", c)}
+            onSaveCollocation={(p, c) => console.log("Save col", p, c)}
             onHintRequest={() => handleUpdateProgress({ hintUsageCount: (progress.hintUsageCount || 0) + 1 })}
             onLessonComplete={() => {}}
-            onBackToSyllabus={() => setCurrentSection(SectionId.ROADMAP)}
+            onBackToSyllabus={() => setCurrentSection(SectionId.LIBRARY)}
             setToastMessage={(toastObj) => setToast(toastObj as any)}
             onRestart={() => handleUpdateProgress({ messages: [] })}
           />
         );
+      case SectionId.MY_VOCABULARY:
+        return <Vocabulary words={progress.vocabulary || []} onUpdateWord={handleUpdateWord} onDelete={handleDeleteWord} />;
+      case SectionId.ADMIN:
+        return <AdminDashboard />;
       default:
-        return <Dashboard progress={progress} onStartLesson={(section) => setCurrentSection(section)} />;
+        return <LibraryView 
+          materials={progress.uploadedMaterials || []} 
+          onSelectMaterial={handleSelectMaterial}
+          onDeleteMaterial={handleDeleteMaterial}
+          onAddNew={onBackToUpload}
+        />;
     }
   };
 
@@ -133,6 +172,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
         onLogout={() => window.location.reload()}
         isTeacher={progress.isAdmin}
         onBackToUpload={onBackToUpload}
+        currentMaterial={progress.uploadedMaterials?.find(m => m.id === progress.currentMaterialId)}
       />
       
       <main className="flex-1 relative overflow-hidden flex flex-col lg:pl-64">
