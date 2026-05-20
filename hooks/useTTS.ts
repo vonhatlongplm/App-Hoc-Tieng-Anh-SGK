@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 export type TTSMode = 'ai' | 'browser';
 
@@ -55,7 +55,6 @@ export const useTTS = () => {
           if (nameB.includes(kw)) scoreB += 1;
         });
         
-        // Edge "Online (Natural)" voices should get a massive boost as they sound exceptionally fluent/natural
         if (nameA.includes('natural') || nameA.includes('online')) scoreA += 5;
         if (nameB.includes('natural') || nameB.includes('online')) scoreB += 5;
         
@@ -64,7 +63,7 @@ export const useTTS = () => {
       
       return sorted[0];
     } else {
-      // "Giọng Máy": Prefer classic, traditional offline desktop voices (like David, Zira, Hazel, or non-online voices)
+      // "Giọng Máy": Prefer classic, traditional offline desktop voices
       const standardKeywords = ['david', 'zira', 'hazel', 'desktop', 'local', 'offline'];
       
       const sorted = [...matchedVoices].sort((a, b) => {
@@ -79,7 +78,6 @@ export const useTTS = () => {
           if (nameB.includes(kw)) scoreB += 5;
         });
         
-        // Penalize online/neural models to keep "Giọng Máy" sounding classic/robotic
         if (nameA.includes('natural') || nameA.includes('neutral') || nameA.includes('online')) scoreA -= 10;
         if (nameB.includes('natural') || nameB.includes('neutral') || nameB.includes('online')) scoreB -= 10;
         
@@ -108,7 +106,6 @@ export const useTTS = () => {
         if (currentChunk.trim()) {
           chunks.push(currentChunk.trim());
         }
-        // If a single word or part is super long, split mechanically by space
         if (part.length > maxLen) {
           const words = part.split(/\s+/);
           for (const word of words) {
@@ -130,7 +127,7 @@ export const useTTS = () => {
     return chunks;
   };
 
-  // Local fallback SpeechSynthesis for a single chunk if Audio element fails or is blocked
+  // Local fallback SpeechSynthesis for a single chunk
   const fallbackSpeechSynthesisForChunk = (
     chunkText: string,
     lang: string,
@@ -143,7 +140,8 @@ export const useTTS = () => {
     }
 
     try {
-      window.speechSynthesis.cancel(); // Clear any pending utterances
+      // Cancel is safe but might interrupt other speak, queue is reset on stopTTS anyway
+      window.speechSynthesis.cancel(); 
       
       const utterance = new SpeechSynthesisUtterance(chunkText);
       const activeMode = typeof window !== 'undefined' ? (localStorage.getItem('vocab_tts_mode') as 'ai' | 'browser') || 'ai' : 'ai';
@@ -163,11 +161,11 @@ export const useTTS = () => {
 
       let safetyTimer = setTimeout(() => {
         if (mySequenceId === currentSequenceId) {
-          console.warn('[TTS-Local-Fallback] SpeechSynthesis safety timeout reached.');
+          console.warn('[TTS-Fallback] SpeechSynthesis safety timeout reached. Auto-advancing to release UI.');
           (window as any).activeUtterance = null;
           onEnded();
         }
-      }, 4000);
+      }, 5000); // Max 5s for fallback safety
 
       utterance.onstart = () => {
         if (mySequenceId === currentSequenceId) {
@@ -184,7 +182,7 @@ export const useTTS = () => {
       };
 
       utterance.onerror = (e) => {
-        console.warn('[TTS-Local-Fallback] Error event:', e);
+        console.warn('[TTS-Fallback] SpeechSynthesis error event:', e);
         clearTimeout(safetyTimer);
         (window as any).activeUtterance = null;
         if (mySequenceId === currentSequenceId) {
@@ -194,7 +192,7 @@ export const useTTS = () => {
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.warn('[TTS-Local-Fallback] Error playing with SpeechSynthesis:', e);
+      console.warn('[TTS-Fallback] Error playing with SpeechSynthesis:', e);
       onEnded();
     }
   };
@@ -204,7 +202,7 @@ export const useTTS = () => {
     mode?: TTSMode, 
     onEndCallback?: () => void
   ) => {
-    // Stop any currently active text-to-speech instances
+    // 1. Dọn dẹp luồng phát cũ lập tức
     stopTTS();
 
     setIsLoading(true);
@@ -233,14 +231,42 @@ export const useTTS = () => {
         }
 
         const currentChunk = chunks[index];
-        
-        // Always try Same-Origin proxy route first to avoid client CORS blocks & sandboxing limits
+
+        // --- CƠ CHẾ AN TOÀN TẬP TRUNG (Safety Timeout) ---
+        // Cam kết giải phóng UI sau tối đa 6 giây dưới bất kỳ điều kiện ngập mạng hoặc sự cố nào
+        let targetTransitioned = false;
+        const forceNextTimeout = setTimeout(() => {
+          if (mySequenceId === currentSequenceId && !targetTransitioned) {
+            console.warn(`[TTS-Safety] Safety guard activated for chunk ${index}. Forcing next chunk.`);
+            targetTransitioned = true;
+            cleanup();
+            index++;
+            playNextChunk();
+          }
+        }, 6000);
+
+        const onChunkCompleted = () => {
+          if (targetTransitioned) return;
+          targetTransitioned = true;
+          clearTimeout(forceNextTimeout);
+          cleanup();
+          if (mySequenceId === currentSequenceId) {
+            index++;
+            playNextChunk();
+          }
+        };
+
+        // --- CƠ CHẾ CHỌN URL BẬP PHÁT ---
+        // 1. Direct Client URL: Sử dụng IP dân cư người dùng, không bao giờ bị Google/Youdao chặn CORS hay Captcha.
+        const directUrl = targetLang === 'en'
+          ? `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(currentChunk)}`
+          : `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(currentChunk)}`;
+
+        // 2. Proxy Backup URL: Nếu tải trực tiếp bị thất bại.
         const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
         
-        // Define playback details
         let playbackRate = 1.0;
         if (activeMode === 'browser') {
-          // Standard traditional robotic speed
           playbackRate = targetLang === 'en' ? 0.92 : 0.82;
         }
 
@@ -251,21 +277,19 @@ export const useTTS = () => {
         audioRef.current = audio;
         activeAudio = audio;
 
-        // Safety timeout for network chunk fetch: 4 seconds limit
-        const chunkTimeout = setTimeout(() => {
-          console.warn(`[TTS-Playlist] Timeout loading proxy audio chunk ${index}. Moving to fallback.`);
-          cleanup();
-          if (mySequenceId === currentSequenceId) {
-            // Emergency fallback: try SpeechSynthesis before completely skipping
-            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
-              index++;
-              playNextChunk();
-            });
+        // Bộ hẹn giờ khẩn cấp cho mạng (Network Tải) quá 1.8 giây thì nhảy sang SpeechSynthesis
+        let networkFallbackTriggered = false;
+        const networkTimeout = setTimeout(() => {
+          if (mySequenceId === currentSequenceId && !networkFallbackTriggered && !targetTransitioned) {
+            console.warn(`[TTS-Timeout] Network loading exceeded 1.8s for chunk ${index}. Switching to Web Speech API.`);
+            networkFallbackTriggered = true;
+            cleanup();
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           }
-        }, 4000);
+        }, 1800);
 
         const cleanup = () => {
-          clearTimeout(chunkTimeout);
+          clearTimeout(networkTimeout);
           try {
             if (audio.parentNode) {
               audio.parentNode.removeChild(audio);
@@ -274,33 +298,88 @@ export const useTTS = () => {
         };
 
         audio.onplay = () => {
-          clearTimeout(chunkTimeout);
+          clearTimeout(networkTimeout);
           if (mySequenceId === currentSequenceId) {
             setIsLoading(false);
           }
         };
 
         audio.onended = () => {
-          cleanup();
-          if (mySequenceId === currentSequenceId) {
-            index++;
-            playNextChunk();
-          }
+          onChunkCompleted();
         };
 
         audio.onerror = (err) => {
-          console.warn(`[TTS-Playlist] Proxy audio load error on chunk ${index}:`, err);
+          if (networkFallbackTriggered || targetTransitioned) return;
+          console.warn(`[TTS-Error] Direct client audio failed to load/play:`, err);
           cleanup();
+          
           if (mySequenceId === currentSequenceId) {
-            // Hot swap to SpeechSynthesis for this chunk so the user hears continuous voice
-            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
-              index++;
-              playNextChunk();
+            // Thử nạp thông qua Proxy
+            console.log(`[TTS-Retry] Trying proxy fetch on chunk ${index}...`);
+            const backupAudio = new Audio();
+            backupAudio.style.display = 'none';
+            document.body.appendChild(backupAudio);
+            
+            audioRef.current = backupAudio;
+            activeAudio = backupAudio;
+
+            let proxyTimeoutTriggered = false;
+            const proxyTimer = setTimeout(() => {
+              if (mySequenceId === currentSequenceId && !proxyTimeoutTriggered && !targetTransitioned) {
+                proxyTimeoutTriggered = true;
+                try { backpackCleanup(); } catch(e){}
+                fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
+              }
+            }, 1800);
+
+            const backpackCleanup = () => {
+              clearTimeout(proxyTimer);
+              try {
+                if (backupAudio.parentNode) {
+                  backupAudio.parentNode.removeChild(backupAudio);
+                }
+              } catch(e){}
+            };
+
+            backupAudio.onplay = () => {
+              clearTimeout(proxyTimer);
+              if (mySequenceId === currentSequenceId) {
+                setIsLoading(false);
+              }
+            };
+
+            backupAudio.onended = () => {
+              backpackCleanup();
+              onChunkCompleted();
+            };
+
+            backupAudio.onerror = (proxyErr) => {
+              if (proxyTimeoutTriggered || targetTransitioned) return;
+              console.warn(`[TTS-Proxy-Error] Proxy route failed too:`, proxyErr);
+              backpackCleanup();
+              if (mySequenceId === currentSequenceId) {
+                // Biện pháp khôi phục tối cao: SpeechSynthesis của Trình duyệt
+                fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
+              }
+            };
+
+            backupAudio.src = proxyUrl;
+            backupAudio.load();
+            try {
+              backupAudio.playbackRate = playbackRate;
+            } catch(e){}
+            backupAudio.play().catch(() => {
+              if (proxyTimeoutTriggered || targetTransitioned) return;
+              backpackCleanup();
+              if (mySequenceId === currentSequenceId) {
+                fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
+              }
             });
           }
         };
 
-        audio.src = proxyUrl;
+        // Gán src tải trực tiếp từ Cloud
+        audio.src = directUrl;
         audio.load();
 
         audio.oncanplay = () => {
@@ -310,13 +389,11 @@ export const useTTS = () => {
         };
 
         audio.play().catch(playErr => {
-          console.warn(`[TTS-Playlist] AutoPlay blocked or failed. Running SpeechSynthesis fallback:`, playErr);
+          if (networkFallbackTriggered || targetTransitioned) return;
+          console.warn(`[TTS-Autoplay] Direct play blocked or failed. Fallback to API/Local synthesis:`, playErr);
           cleanup();
           if (mySequenceId === currentSequenceId) {
-            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
-              index++;
-              playNextChunk();
-            });
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           }
         });
       };
@@ -324,7 +401,7 @@ export const useTTS = () => {
       playNextChunk();
 
     } catch (err) {
-      console.error("[TTS] Critical failure in loop, initializing hard emergency cleanup:", err);
+      console.error("[TTS] Critical error in play loop:", err);
       setIsLoading(false);
       onEndCallback?.();
     }
@@ -332,7 +409,7 @@ export const useTTS = () => {
 
   const stopTTS = () => {
     setIsLoading(false);
-    currentSequenceId++; // Break ongoing sequence immediately
+    currentSequenceId++; // Tăng sequence ID ngay để ngắt các callback cũ đang chờ
     
     if (activeAudio) {
       try {
