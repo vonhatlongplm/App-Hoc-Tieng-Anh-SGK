@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const GEMINI_MODEL = "gemini-2.0-flash"; // Switched to 2.0 as primary default for standard availability, fallback will auto-resolve if needed
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash"; // Switched to 2.0 as primary default, can be overridden by environment variable
 
 let genAI: any = null;
 
