@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 
 export type TTSMode = 'ai' | 'browser';
 
-// Keep a global static reference to the playing audio so we can stop it precisely across hook calls
+// Keep global static references to prevent Garbage Collection issues in Chrome/V8
 let activeAudio: HTMLAudioElement | null = null;
 let currentSequenceId: number = 0;
 let localGlobalVoices: SpeechSynthesisVoice[] = [];
@@ -19,7 +19,6 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 export const useTTS = () => {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const synthesisRef = useRef<boolean>(false);
 
   const isVietnamese = (txt: string) => {
     // Check for unique Vietnamese accent characters
@@ -81,8 +80,8 @@ export const useTTS = () => {
         });
         
         // Penalize online/neural models to keep "Giọng Máy" sounding classic/robotic
-        if (nameA.includes('natural') || nameA.includes('neural') || nameA.includes('online')) scoreA -= 10;
-        if (nameB.includes('natural') || nameB.includes('neural') || nameB.includes('online')) scoreB -= 10;
+        if (nameA.includes('natural') || nameA.includes('neutral') || nameA.includes('online')) scoreA -= 10;
+        if (nameB.includes('natural') || nameB.includes('neutral') || nameB.includes('online')) scoreB -= 10;
         
         return scoreB - scoreA;
       });
@@ -91,12 +90,121 @@ export const useTTS = () => {
     }
   };
 
+  // Split into chunks of maximum character limit to be safe for Google Translate TTS API limit (200 chars)
+  const splitIntoChunks = (text: string, maxLen = 160): string[] => {
+    const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
+    if (!cleanText) return [];
+    
+    // Split by punctuation first to preserve natural speaking pauses
+    const sentences = cleanText.split(/([.!?。、，;；,])\s*/);
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const part of sentences) {
+      if (!part) continue;
+      if ((currentChunk + part).length <= maxLen) {
+        currentChunk += part;
+      } else {
+        if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+        }
+        // If a single word or part is super long, split mechanically by space
+        if (part.length > maxLen) {
+          const words = part.split(/\s+/);
+          for (const word of words) {
+            if ((currentChunk + ' ' + word).trim().length <= maxLen) {
+              currentChunk = (currentChunk + ' ' + word).trim();
+            } else {
+              if (currentChunk.trim()) chunks.push(currentChunk.trim());
+              currentChunk = word;
+            }
+          }
+        } else {
+          currentChunk = part;
+        }
+      }
+    }
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
+    return chunks;
+  };
+
+  // Local fallback SpeechSynthesis for a single chunk if Audio element fails or is blocked
+  const fallbackSpeechSynthesisForChunk = (
+    chunkText: string,
+    lang: string,
+    mySequenceId: number,
+    onEnded: () => void
+  ) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      onEnded();
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel(); // Clear any pending utterances
+      
+      const utterance = new SpeechSynthesisUtterance(chunkText);
+      const activeMode = typeof window !== 'undefined' ? (localStorage.getItem('vocab_tts_mode') as 'ai' | 'browser') || 'ai' : 'ai';
+      const selectedVoice = getBestVoice(lang, activeMode);
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
+      } else {
+        utterance.lang = lang === 'en' ? 'en-US' : 'vi-VN';
+      }
+
+      utterance.rate = lang === 'en' ? 0.95 : 0.85;
+      
+      // Explicitly protect from V8 Garbage Collection by attaching to window namespace
+      (window as any).activeUtterance = utterance;
+
+      let safetyTimer = setTimeout(() => {
+        if (mySequenceId === currentSequenceId) {
+          console.warn('[TTS-Local-Fallback] SpeechSynthesis safety timeout reached.');
+          (window as any).activeUtterance = null;
+          onEnded();
+        }
+      }, 4000);
+
+      utterance.onstart = () => {
+        if (mySequenceId === currentSequenceId) {
+          setIsLoading(false);
+        }
+      };
+
+      utterance.onend = () => {
+        clearTimeout(safetyTimer);
+        (window as any).activeUtterance = null;
+        if (mySequenceId === currentSequenceId) {
+          onEnded();
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('[TTS-Local-Fallback] Error event:', e);
+        clearTimeout(safetyTimer);
+        (window as any).activeUtterance = null;
+        if (mySequenceId === currentSequenceId) {
+          onEnded();
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('[TTS-Local-Fallback] Error playing with SpeechSynthesis:', e);
+      onEnded();
+    }
+  };
+
   const playTTS = async (
     text: string, 
     mode?: TTSMode, 
     onEndCallback?: () => void
   ) => {
-    // 1. Stop any currently active text-to-speech instances
+    // Stop any currently active text-to-speech instances
     stopTTS();
 
     setIsLoading(true);
@@ -106,171 +214,117 @@ export const useTTS = () => {
       const activeMode = mode || (typeof window !== 'undefined' ? (localStorage.getItem('vocab_tts_mode') as TTSMode) : 'ai') || 'ai';
       const targetLang = isVietnamese(text) ? 'vi' : 'en';
 
-      // Clean up whitespace
-      const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
-      if (!cleanText) {
+      const chunks = splitIntoChunks(text, 160);
+      if (chunks.length === 0) {
         setIsLoading(false);
         onEndCallback?.();
         return;
       }
 
-      // Check if SpeechSynthesis is supported and active
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        // Find best local voice matching preference
-        const selectedVoice = getBestVoice(targetLang, activeMode);
-        
-        if (selectedVoice) {
-          // Speak locally using Chrome/Edge/Apple SpeechSynthesis (Instant, CORS-free, no server loading failures)
-          console.log(`[TTS] Speaking using local SpeechSynthesis. Voice: ${selectedVoice.name}, Mode: ${activeMode}`);
-          
-          window.speechSynthesis.cancel(); // Clear any queued utterances to avoid browser speech locks
-          
-          const utterance = new SpeechSynthesisUtterance(cleanText);
-          utterance.voice = selectedVoice;
-          utterance.lang = selectedVoice.lang;
-          
-          // Tailor voice style
-          if (activeMode === 'ai') {
-            utterance.rate = 1.0; // Fluent natural cadence
-            utterance.pitch = 1.0;
-          } else {
-            utterance.rate = targetLang === 'en' ? 0.95 : 0.85; // Machine speaking rate (measured, slightly robotic)
-            utterance.pitch = 0.95;
-          }
+      let index = 0;
 
-          // Safety trigger to handle rare browser getVoices freeze or missing end boundary callback
-          const maxWords = cleanText.split(/\s+/).length;
-          const safetyTimeoutMs = Math.max(4000, maxWords * 600); // 600ms per word + base padding
-          
-          let safetyTimeout = setTimeout(() => {
-            if (mySequenceId === currentSequenceId) {
-              console.warn('[TTS-SpeechSynthesis] Safety timeout reached, resetting state.');
-              setIsLoading(false);
-              onEndCallback?.();
-            }
-          }, safetyTimeoutMs);
+      const playNextChunk = () => {
+        if (mySequenceId !== currentSequenceId) return;
 
-          const speechEnded = () => {
-            clearTimeout(safetyTimeout);
-            if (mySequenceId === currentSequenceId) {
-              setIsLoading(false);
-              onEndCallback?.();
-            }
-          };
-
-          utterance.onstart = () => {
-            if (mySequenceId === currentSequenceId) {
-              setIsLoading(false); // Done loading, actively speaking
-            }
-          };
-
-          utterance.onend = speechEnded;
-          utterance.onerror = (err) => {
-            console.warn('[TTS-SpeechSynthesis] Playback error event:', err);
-            speechEnded();
-          };
-
-          window.speechSynthesis.speak(utterance);
+        if (index >= chunks.length) {
+          setIsLoading(false);
+          onEndCallback?.();
           return;
         }
-      }
 
-      // ---------------------------------------------------------
-      // FALLBACK: If SpeechSynthesis fails or isn't supported, 
-      // play TTS via reliable, cross-origin web request streaming
-      // ---------------------------------------------------------
-      console.log(`[TTS] Synthesis fallback. Relying on streaming URLs.`);
-      let streamingUrl = '';
-      let playbackRate = 1.0;
-
-      if (activeMode === 'ai') {
-        // High quality US English fallback
-        streamingUrl = `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(cleanText)}`;
-        playbackRate = 1.0;
-      } else {
-        // Standard Machine English / Vietnamese Google Voice fallback
-        streamingUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${targetLang}&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
-        playbackRate = targetLang === 'en' ? 1.0 : 0.86;
-      }
-
-      const audio = new Audio();
-      audio.style.display = 'none';
-      document.body.appendChild(audio);
-
-      audioRef.current = audio;
-      activeAudio = audio;
-
-      // 3-second network loading safety guard: if CORS, network lag, or Google CAPTCHA blocks loading,
-      // fail fast and reset states so the client isn't locked on loading spinner.
-      const playbackSafetyTimeout = setTimeout(() => {
-        try {
-          if (audio.parentNode) {
-            audio.parentNode.removeChild(audio);
-          }
-        } catch (e) {}
+        const currentChunk = chunks[index];
         
-        console.warn(`[TTS-Fallback] Audio load timed out after 3s.`);
-        if (mySequenceId === currentSequenceId) {
-          setIsLoading(false);
-          onEndCallback?.();
+        // Always try Same-Origin proxy route first to avoid client CORS blocks & sandboxing limits
+        const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
+        
+        // Define playback details
+        let playbackRate = 1.0;
+        if (activeMode === 'browser') {
+          // Standard traditional robotic speed
+          playbackRate = targetLang === 'en' ? 0.92 : 0.82;
         }
-      }, 3000);
 
-      const cleanup = () => {
-        clearTimeout(playbackSafetyTimeout);
-        try {
-          if (audio.parentNode) {
-            audio.parentNode.removeChild(audio);
+        const audio = new Audio();
+        audio.style.display = 'none';
+        document.body.appendChild(audio);
+
+        audioRef.current = audio;
+        activeAudio = audio;
+
+        // Safety timeout for network chunk fetch: 4 seconds limit
+        const chunkTimeout = setTimeout(() => {
+          console.warn(`[TTS-Playlist] Timeout loading proxy audio chunk ${index}. Moving to fallback.`);
+          cleanup();
+          if (mySequenceId === currentSequenceId) {
+            // Emergency fallback: try SpeechSynthesis before completely skipping
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
+              index++;
+              playNextChunk();
+            });
           }
-        } catch (e) {}
+        }, 4000);
+
+        const cleanup = () => {
+          clearTimeout(chunkTimeout);
+          try {
+            if (audio.parentNode) {
+              audio.parentNode.removeChild(audio);
+            }
+          } catch (e) {}
+        };
+
+        audio.onplay = () => {
+          clearTimeout(chunkTimeout);
+          if (mySequenceId === currentSequenceId) {
+            setIsLoading(false);
+          }
+        };
+
+        audio.onended = () => {
+          cleanup();
+          if (mySequenceId === currentSequenceId) {
+            index++;
+            playNextChunk();
+          }
+        };
+
+        audio.onerror = (err) => {
+          console.warn(`[TTS-Playlist] Proxy audio load error on chunk ${index}:`, err);
+          cleanup();
+          if (mySequenceId === currentSequenceId) {
+            // Hot swap to SpeechSynthesis for this chunk so the user hears continuous voice
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
+              index++;
+              playNextChunk();
+            });
+          }
+        };
+
+        audio.src = proxyUrl;
+        audio.load();
+
+        audio.oncanplay = () => {
+          try {
+            audio.playbackRate = playbackRate;
+          } catch (e) {}
+        };
+
+        audio.play().catch(playErr => {
+          console.warn(`[TTS-Playlist] AutoPlay blocked or failed. Running SpeechSynthesis fallback:`, playErr);
+          cleanup();
+          if (mySequenceId === currentSequenceId) {
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, () => {
+              index++;
+              playNextChunk();
+            });
+          }
+        });
       };
 
-      audio.onplay = () => {
-        clearTimeout(playbackSafetyTimeout);
-        if (mySequenceId === currentSequenceId) {
-          setIsLoading(false);
-        }
-      };
-
-      audio.onended = () => {
-        cleanup();
-        if (mySequenceId === currentSequenceId) {
-          setIsLoading(false);
-          onEndCallback?.();
-        }
-      };
-
-      audio.onerror = (err) => {
-        cleanup();
-        console.warn('[TTS-Fallback] Audio load error:', err);
-        if (mySequenceId === currentSequenceId) {
-          setIsLoading(false);
-          onEndCallback?.();
-        }
-      };
-
-      audio.src = streamingUrl;
-      audio.load();
-
-      audio.oncanplay = () => {
-        try {
-          audio.playbackRate = playbackRate;
-        } catch (e) {}
-      };
-
-      try {
-        await audio.play();
-      } catch (err) {
-        cleanup();
-        console.warn('[TTS-Fallback] Audio play blocked:', err);
-        if (mySequenceId === currentSequenceId) {
-          setIsLoading(false);
-          onEndCallback?.();
-        }
-      }
+      playNextChunk();
 
     } catch (err) {
-      console.error("[TTS] Internal execution loop failed:", err);
+      console.error("[TTS] Critical failure in loop, initializing hard emergency cleanup:", err);
       setIsLoading(false);
       onEndCallback?.();
     }
@@ -278,7 +332,7 @@ export const useTTS = () => {
 
   const stopTTS = () => {
     setIsLoading(false);
-    currentSequenceId++; // Cancel active playlist sequences
+    currentSequenceId++; // Break ongoing sequence immediately
     
     if (activeAudio) {
       try {
@@ -305,6 +359,7 @@ export const useTTS = () => {
       try {
         window.speechSynthesis.cancel();
       } catch (e) {}
+      (window as any).activeUtterance = null;
     }
   };
 
