@@ -29,6 +29,63 @@ const getGenAI = () => {
   return genAI;
 };
 
+// Resilient helper to list available models and select the best supported one
+const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<string> => {
+  try {
+    console.log("[Omni-SDK-v3] Querying available models for this API key...");
+    const modelsResponse = await ai.models.list();
+    const list = modelsResponse?.page || [];
+    
+    const modelNames = list.map((m: any) => m.name?.replace(/^models\//, '') || "");
+    console.log("[Omni-SDK-v3] Supported models on this key:", modelNames);
+    
+    // 1. Check exact match
+    const exactMatch = list.find((m: any) => m.name && m.name.toLowerCase().replace(/^models\//, '') === preferredModel.toLowerCase());
+    if (exactMatch && exactMatch.name) {
+      return exactMatch.name.replace(/^models\//, '');
+    }
+    
+    // 2. Candidate pool in priority order
+    const fallbackCandidates = [
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-2.0-flash-lite-preview",
+      "gemini-2.0-flash-exp"
+    ];
+    for (const cand of fallbackCandidates) {
+      if (modelNames.includes(cand)) {
+        console.log(`[Omni-SDK-v3] Falling back to supported available candidate: ${cand}`);
+        return cand;
+      }
+    }
+    
+    // 3. Any model supporting generateContent action
+    const supportedModel = list.find((m: any) => 
+      m.name && 
+      m.supportedActions && 
+      m.supportedActions.some((act: string) => act.toLowerCase().includes("generatecontent"))
+    );
+    if (supportedModel && supportedModel.name) {
+      const selected = supportedModel.name.replace(/^models\//, '');
+      console.log(`[Omni-SDK-v3] Selecting first API model supporting generateContent: ${selected}`);
+      return selected;
+    }
+    
+    // 4. Any model keyword match
+    const geminiModel = list.find((m: any) => m.name && m.name.toLowerCase().includes("gemini"));
+    if (geminiModel && geminiModel.name) {
+      const selected = geminiModel.name.replace(/^models\//, '');
+      console.log(`[Omni-SDK-v3] Selecting any Gemini model: ${selected}`);
+      return selected;
+    }
+  } catch (err) {
+    console.error("[Omni-SDK-v3] Warning: Failed to retrieve models from list API:", err);
+  }
+  return preferredModel;
+};
+
 const getFileManager = () => {
   if (!fileManager) {
     const key = process.env.GEMINI_API_KEY;
@@ -131,7 +188,6 @@ async function startServer() {
       }
 
       const ai = getGenAI();
-      console.log(`[Omni-SDK-v3] Calling Gemini via Dev Server with model: ${GEMINI_MODEL}`);
       
       const finalContents = contents.map((c: any) => {
         const role = c.role === 'model' ? 'model' : 'user';
@@ -151,11 +207,13 @@ async function startServer() {
         return res.status(400).json({ error: "Không tìm thấy nội dung hợp lệ (Check console logs)" });
       }
 
-      console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API via Antigravity...`);
+      let activeModel = GEMINI_MODEL;
+      console.log(`[Omni-SDK-v3] Calling Gemini via Dev Server with starting model: ${activeModel}`);
       
+      let response;
       try {
-        const response = await ai.models.generateContent({ 
-          model: GEMINI_MODEL,
+        response = await ai.models.generateContent({ 
+          model: activeModel,
           contents: finalContents,
           config: {
             systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
@@ -171,43 +229,71 @@ async function startServer() {
             ]
           }
         });
-        
-        console.log("Gemini response received.");
-        
-        const candidate = response.candidates?.[0];
-        if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
-            console.warn("AI blocked by safety filters");
-            return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn." });
-        }
-
-        const text = response.text;
-        if (!text) {
-          console.warn("Empty response text");
-          return res.json({ text: "Gia sư không thể phản hồi lúc này." });
-        }
-
-        res.json({ text });
       } catch (apiErr: any) {
-        console.error("Gemini API Error (Dev):", apiErr);
-        if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction') || apiErr.message?.includes('wire_format')) {
-          console.warn("Retrying with simple systemInstruction");
-          try {
-            const response = await ai.models.generateContent({ 
-              model: GEMINI_MODEL,
-              contents: finalContents,
-              config: { systemInstruction: systemInstruction ? String(systemInstruction) : undefined }
-            });
-            return res.json({ text: response.text });
-          } catch(e) {
-            const finalResp = await ai.models.generateContent({ 
-              model: GEMINI_MODEL,
-              contents: finalContents
-            });
-            return res.json({ text: finalResp.text });
+        console.warn("[Omni-SDK-v3] Primary generation failed on dev server. Root details:", apiErr?.message || apiErr);
+        
+        const isModelOr404Error = 
+          apiErr.status === 404 || 
+          apiErr.code === 404 || 
+          String(apiErr).toLowerCase().includes("not found") || 
+          String(apiErr).toLowerCase().includes("not_found") || 
+          String(apiErr).toLowerCase().includes("support");
+
+        if (isModelOr404Error) {
+          console.log("[Omni-SDK-v3] Attempting model discovery fallback on dev server...");
+          const discoveredModel = await getBestAvailableModel(ai, GEMINI_MODEL);
+          if (discoveredModel !== activeModel) {
+            activeModel = discoveredModel;
+            console.log(`[Omni-SDK-v3] Re-trying dev-server generation using discovered model: ${activeModel}`);
+            try {
+              response = await ai.models.generateContent({ 
+                model: activeModel,
+                contents: finalContents,
+                config: {
+                  systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
+                  temperature: 0.7,
+                }
+              });
+            } catch (retryErr: any) {
+              console.error("[Omni-SDK-v3] Discovered model retry failed on dev server:", retryErr);
+              throw apiErr;
+            }
+          } else {
+            // Last resort simplified call
+            try {
+              console.warn("[Omni-SDK-v3] Simple fallback attempt with direct generateContent...");
+              response = await ai.models.generateContent({ 
+                model: GEMINI_MODEL,
+                contents: finalContents,
+                config: { systemInstruction: systemInstruction ? String(systemInstruction) : undefined }
+              });
+            } catch(e) {
+              response = await ai.models.generateContent({ 
+                model: GEMINI_MODEL,
+                contents: finalContents
+              });
+            }
           }
+        } else {
+          throw apiErr;
         }
-        throw apiErr;
       }
+      
+      console.log("Gemini response received successfully.");
+      
+      const candidate = response.candidates?.[0];
+      if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
+          console.warn("AI blocked by safety filters");
+          return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn." });
+      }
+
+      const text = response.text;
+      if (!text) {
+        console.warn("Empty response text");
+        return res.json({ text: "Gia sư không thể phản hồi lúc này." });
+      }
+
+      res.json({ text });
     } catch (err: any) {
       console.error("Detailed /api/generate Error [Omni-SDK-v3]:", err);
       const errorMsg = err.message || "Unknown generate error";
