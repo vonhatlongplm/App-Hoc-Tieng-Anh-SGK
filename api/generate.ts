@@ -136,14 +136,13 @@ export default async function handler(req: any, res: any) {
     let response;
     let fallbackModels = [
       activeModel,
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-8b",
-      "gemini-2.0-flash-lite-preview",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash",
       "gemini-2.0-flash",
-      "gemini-2.5-flash"
+      "gemini-2.0-flash-lite-preview"
     ];
     // Remove duplicates but keep primary order intact
-    fallbackModels = Array.from(new Set(fallbackModels));
+    fallbackModels = Array.from(new Set(fallbackModels)).filter(m => m !== "gemini-1.5-flash" && m !== "gemini-1.5-flash-8b");
 
     let lastError = null;
     for (let i = 0; i < fallbackModels.length; i++) {
@@ -188,10 +187,10 @@ export default async function handler(req: any, res: any) {
     }
 
     if (lastError && !response) {
-      console.warn("[Omni-SDK-v3] Primary model cascade list failed. Attempting absolute emergency bypass call with standard gemini-1.5-flash...");
+      console.warn("[Omni-SDK-v3] Primary model cascade list failed. Attempting absolute emergency bypass call with standard gemini-3.5-flash...");
       try {
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-3.5-flash",
           contents: finalContents
         });
       } catch (finalErr: any) {

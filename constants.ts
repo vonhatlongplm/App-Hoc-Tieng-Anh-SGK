@@ -1,6 +1,6 @@
 
 export const APP_NAME = "OmniEnglish";
-export const GEMINI_MODEL = (typeof process !== 'undefined' && process.env?.GEMINI_MODEL) || "gemini-2.0-flash";
+export const GEMINI_MODEL = (typeof process !== 'undefined' && process.env?.GEMINI_MODEL) || "gemini-3.5-flash";
 
 export const DEFAULT_SYSTEM_INSTRUCTION = `Bạn là một Giáo viên Tiếng Anh AI toàn năng.`;
 
