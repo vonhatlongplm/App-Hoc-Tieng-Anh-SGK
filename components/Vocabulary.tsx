@@ -720,7 +720,7 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
         return () => {
             stopTTS();
         };
-    }, [stopTTS]);
+    }, []); // Run only on unmount to avoid premature stopTTS during state changes/re-renders
 
     const playTTS = (text: string) => {
         playTTSHook(text, ttsMode);

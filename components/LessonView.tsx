@@ -403,7 +403,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         return () => {
             stopTTS();
         };
-    }, [stopTTS]);
+    }, []); // Run only on unmount to prevent premature cancels on state changes
 
     useEffect(() => {
         let selectionTimeout: any;
