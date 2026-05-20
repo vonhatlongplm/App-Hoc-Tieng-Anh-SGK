@@ -74,12 +74,11 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-      // Use top-level systemInstruction with parts array (wire format compatibility)
       const response = await ai.models.generateContent({ 
         model: GEMINI_MODEL,
         contents: finalContents,
-        systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction).substring(0, 8000) }] } : undefined,
         config: {
+          systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction).substring(0, 8000) }] } : undefined,
           temperature: 0.7,
           topP: 0.95,
           topK: 64,
@@ -91,7 +90,7 @@ export default async function handler(req: any, res: any) {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
           ]
         }
-      } as any);
+      });
 
       const text = response.text;
       if (!text) {
@@ -101,14 +100,28 @@ export default async function handler(req: any, res: any) {
       res.status(200).json({ text });
     } catch (apiErr: any) {
       console.error("Gemini API Error Detail:", apiErr);
-      // Specific check for systemInstruction error
-      if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction')) {
-         console.warn("Retrying without systemInstruction due to error");
-         const response = await ai.models.generateContent({ 
-           model: GEMINI_MODEL,
-           contents: finalContents
-         });
-         return res.status(200).json({ text: response.text });
+      
+      // Fallback for systemInstruction error or common SDK issues
+      if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction') || apiErr.message?.includes('wire_format')) {
+         console.warn("Retrying with raw systemInstruction string");
+         try {
+           const response = await ai.models.generateContent({ 
+             model: GEMINI_MODEL,
+             contents: finalContents,
+             config: {
+               systemInstruction: systemInstruction ? String(systemInstruction) : undefined
+             }
+           });
+           return res.status(200).json({ text: response.text });
+         } catch (secondErr) {
+           console.error("Second attempt failed:", secondErr);
+           // Final fallback: no system instruction
+           const finalResponse = await ai.models.generateContent({ 
+             model: GEMINI_MODEL,
+             contents: finalContents
+           });
+           return res.status(200).json({ text: finalResponse.text });
+         }
       }
       throw apiErr;
     }
@@ -117,7 +130,7 @@ export default async function handler(req: any, res: any) {
       const errorMsg = err.message || "Generation failed";
       res.status(500).json({ 
         error: `[Omni-SDK-v3] ${errorMsg}`,
-        details: err.stack || ""
+        details: err.stack ? err.stack.substring(0, 500) : "No stack"
       });
     }
 }

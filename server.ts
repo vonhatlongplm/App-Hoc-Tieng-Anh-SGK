@@ -154,15 +154,11 @@ async function startServer() {
       console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API via Antigravity...`);
       
       try {
-        // According to official Gemini API wire format, system_instruction is top-level.
-        // Antigravity SDK might expect it inside config or top-level depending on version.
-        // We'll try top-level as it's more standard for the wire format it seems to be complaining about.
         const response = await ai.models.generateContent({ 
           model: GEMINI_MODEL,
           contents: finalContents,
-          // Moving systemInstruction to top-level if config approach failed previously
-          systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction) }] } : undefined,
           config: {
+            systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction) }] } : undefined,
             temperature: 0.7,
             topP: 0.95,
             topK: 64,
@@ -174,9 +170,9 @@ async function startServer() {
               { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
             ]
           }
-        } as any);
+        });
         
-        console.log("Gemini response received from Antigravity.");
+        console.log("Gemini response received.");
         
         const candidate = response.candidates?.[0];
         if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
@@ -193,13 +189,22 @@ async function startServer() {
         res.json({ text });
       } catch (apiErr: any) {
         console.error("Gemini API Error (Dev):", apiErr);
-        if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction')) {
-          console.warn("Retrying without systemInstruction");
-          const response = await ai.models.generateContent({ 
-            model: GEMINI_MODEL,
-            contents: finalContents
-          });
-          return res.json({ text: response.text });
+        if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction') || apiErr.message?.includes('wire_format')) {
+          console.warn("Retrying with simple systemInstruction");
+          try {
+            const response = await ai.models.generateContent({ 
+              model: GEMINI_MODEL,
+              contents: finalContents,
+              config: { systemInstruction: systemInstruction ? String(systemInstruction) : undefined }
+            });
+            return res.json({ text: response.text });
+          } catch(e) {
+            const finalResp = await ai.models.generateContent({ 
+              model: GEMINI_MODEL,
+              contents: finalContents
+            });
+            return res.json({ text: finalResp.text });
+          }
         }
         throw apiErr;
       }
