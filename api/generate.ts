@@ -46,6 +46,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Invalid contents format" });
     }
 
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      console.error("Vercel Generate Error: GEMINI_API_KEY is missing");
+      return res.status(401).json({ error: "[Omni-SDK-v3] GEMINI_API_KEY is missing. Vui lòng thêm biến này vào Settings > Environment Variables trên Vercel và Redeploy lại app." });
+    }
+
     const ai = getGenAI();
     console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
     
@@ -91,10 +97,10 @@ export default async function handler(req: any, res: any) {
 
     res.status(200).json({ text });
     } catch (err: any) {
-      console.error("Vercel Generate Error [Antigravity SDK]:", err);
+      console.error("Vercel Generate Error [Omni-SDK-v3]:", err);
       const errorMsg = err.message || "Generation failed";
       res.status(500).json({ 
-        error: `[Antigravity SDK] ${errorMsg}`,
+        error: `[Omni-SDK-v3] ${errorMsg}`,
         details: err.stack || ""
       });
     }

@@ -124,6 +124,12 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid contents format" });
       }
 
+      const key = process.env.GEMINI_API_KEY;
+      if (!key) {
+        console.error("Local/AI-Studio Generate Error: GEMINI_API_KEY is missing");
+        return res.status(401).json({ error: "[Omni-SDK-v3] GEMINI_API_KEY is missing. Vui lòng thêm biến này vào panel Settings > Secrets và khởi động lại server." });
+      }
+
       const ai = getGenAI();
       console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
       
@@ -176,10 +182,10 @@ async function startServer() {
 
       res.json({ text });
     } catch (err: any) {
-      console.error("Detailed /api/generate Error [Antigravity SDK]:", err);
+      console.error("Detailed /api/generate Error [Omni-SDK-v3]:", err);
       const errorMsg = err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: `[Antigravity SDK] ${errorMsg}`,
+        error: `[Omni-SDK-v3] ${errorMsg}`,
         details: err.stack || ""
       });
     }
