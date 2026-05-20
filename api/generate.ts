@@ -40,10 +40,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const ai = getGenAI();
+    console.log(`Using model: ${GEMINI_MODEL}`);
     const model = ai.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
+      model: GEMINI_MODEL,
       systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined
-    });
+    }, { apiVersion: 'v1' });
 
     const safetySettings = [
       { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
@@ -90,12 +91,12 @@ export default async function handler(req: any, res: any) {
     }
 
     res.status(200).json({ text });
-  } catch (err: any) {
-    console.error("Vercel Generate Error:", err);
-    const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Generation failed";
-    res.status(500).json({ 
-      error: errorMsg,
-      details: err.stack || ""
-    });
-  }
+    } catch (err: any) {
+      console.error("Vercel Generate Error [TAG-V2.6]:", err);
+      const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Generation failed";
+      res.status(500).json({ 
+        error: `[TAG-V2.6] ${errorMsg}`,
+        details: err.stack || ""
+      });
+    }
 }

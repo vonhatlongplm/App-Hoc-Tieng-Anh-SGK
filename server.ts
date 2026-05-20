@@ -118,10 +118,11 @@ async function startServer() {
       }
 
       const ai = getGenAI();
+      console.log(`Using model: ${GEMINI_MODEL}`);
       const model = ai.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
+        model: GEMINI_MODEL,
         systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined
-      });
+      }, { apiVersion: 'v1' });
       
       const safetySettings = [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
@@ -181,11 +182,11 @@ async function startServer() {
 
       res.json({ text });
     } catch (err: any) {
-      console.error("Detailed /api/generate Error:", err);
+      console.error("Detailed /api/generate Error [TAG-V2.6]:", err);
       // Try to extract a useful message for the client
       const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: errorMsg,
+        error: `[TAG-V2.6] ${errorMsg}`,
         details: err.stack || ""
       });
     }
