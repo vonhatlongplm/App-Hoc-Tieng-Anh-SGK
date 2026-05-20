@@ -242,9 +242,37 @@ export const useTTS = () => {
 
     try {
       const activeMode = mode || (typeof window !== 'undefined' ? (localStorage.getItem('vocab_tts_mode') as TTSMode) : 'ai') || 'ai';
-      const targetLang = isVietnamese(text) ? 'vi' : 'en';
+      
+      const cleanTextForSpeech = (rawText: string) => {
+        if (!rawText) return '';
+        return rawText
+          // Remove markdown headers (e.g. ###, ####, etc.)
+          .replace(/^#+\s+/gm, '')
+          .replace(/#+/g, '') // Also remove any other raw hash symbols
+          // Remove images but keep alt text
+          .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+          // Remove links but keep link text
+          .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+          // Remove markdown emphasis characters (*, _, ~) but keep text
+          .replace(/\*{1,3}/g, '')
+          .replace(/_{1,3}/g, '')
+          // Remove inline code ticks
+          .replace(/`{1,3}/g, '')
+          // Remove blockquote symbol
+          .replace(/^\s*>\s+/gm, '')
+          // Remove list bullets
+          .replace(/^\s*[\*\-+]\s+/gm, '')
+          // Strip line fillers like __________
+          .replace(/[\\_L]{3,}/g, '')
+          // Normalize spaces
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
 
-      const chunks = splitIntoChunks(text, 160);
+      const cleanedText = cleanTextForSpeech(text);
+      const targetLang = isVietnamese(cleanedText) ? 'vi' : 'en';
+
+      const chunks = splitIntoChunks(cleanedText, 160);
       if (chunks.length === 0) {
         setIsLoading(false);
         onEndCallback?.();

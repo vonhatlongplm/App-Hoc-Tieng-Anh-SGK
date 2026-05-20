@@ -7,6 +7,30 @@ const MarkdownRenderer: React.FC<{
 }> = ({ text, onWordDoubleClick }) => {
     const sanitizedText = text.replace(/<br\s*\/?>/gi, '\n').replace(/\\_/g, '_');
 
+    const ensureHeadingSpacing = (txt: string): string => {
+        const lines = txt.split('\n');
+        const processedLines: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const headingMatch = line.trim().match(/^(#{1,6})\s+(.*)$/);
+            if (headingMatch) {
+                if (processedLines.length > 0 && processedLines[processedLines.length - 1].trim() !== '') {
+                    processedLines.push('');
+                }
+                processedLines.push(line);
+                if (i < lines.length - 1 && lines[i + 1].trim() !== '') {
+                    processedLines.push('');
+                }
+            } else {
+                processedLines.push(line);
+            }
+        }
+        return processedLines.join('\n');
+    };
+
+    const spacedText = ensureHeadingSpacing(sanitizedText);
+
     const renderInteractiveSegment = (segment: string, key: string | number) => {
         const cleanedWord = segment.trim().replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").toLowerCase();
         const canBeDoubleClicked = /^[a-zA-Z'’]{2,}$/.test(cleanedWord);
@@ -55,7 +79,7 @@ const MarkdownRenderer: React.FC<{
         });
     };
 
-    const blocks = sanitizedText.split(/\n\s*\n/);
+    const blocks = spacedText.split(/\n\s*\n/);
 
     return (
         <div className="text-slate-700 leading-relaxed space-y-4">
@@ -66,9 +90,19 @@ const MarkdownRenderer: React.FC<{
 
                 if (lines.length === 1) {
                     const line = lines[0].trim();
-                    if (line.startsWith('### ')) return <h3 key={blockIndex} className="text-lg font-bold text-slate-800">{processInlineFormatting(line.substring(4), `h3-${blockIndex}`)}</h3>;
-                    if (line.startsWith('## ')) return <h2 key={blockIndex} className="text-xl font-black border-b border-slate-200 pb-2">{processInlineFormatting(line.substring(3), `h2-${blockIndex}`)}</h2>;
-                    if (line.startsWith('# ')) return <h1 key={blockIndex} className="text-2xl font-black border-b-2 border-slate-300 pb-2">{processInlineFormatting(line.substring(2), `h1-${blockIndex}`)}</h1>;
+                    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+                    if (headingMatch) {
+                        const level = headingMatch[1].length;
+                        const content = headingMatch[2];
+                        const key = `h${level}-${blockIndex}`;
+                        const formatted = processInlineFormatting(content, key);
+                        if (level === 1) return <h1 key={blockIndex} className="text-2xl font-black border-b-2 border-slate-300 pb-2 mb-2">{formatted}</h1>;
+                        if (level === 2) return <h2 key={blockIndex} className="text-xl font-extrabold border-b border-slate-200 pb-2 text-slate-800 mb-1.5">{formatted}</h2>;
+                        if (level === 3) return <h3 key={blockIndex} className="text-lg font-bold text-slate-800 mb-1">{formatted}</h3>;
+                        if (level === 4) return <h4 key={blockIndex} className="text-base font-bold text-slate-700 mb-1">{formatted}</h4>;
+                        if (level === 5) return <h5 key={blockIndex} className="text-sm font-bold text-slate-600 tracking-wide mb-1">{formatted}</h5>;
+                        return <h6 key={blockIndex} className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{formatted}</h6>;
+                    }
                 }
 
                 if (trimmedBlock === '---' || trimmedBlock === '***' || trimmedBlock === '___') return <hr key={blockIndex} className="my-6 border-slate-200" />;
