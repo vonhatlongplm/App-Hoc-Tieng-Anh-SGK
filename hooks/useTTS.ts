@@ -88,20 +88,28 @@ export const useTTS = () => {
     const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
     if (!cleanText) return [];
     
-    const sentences = cleanText.split(/([.!?。、，;；,])\s*/);
+    // Split by punctuation first to preserve natural speaking pauses
+    const sentences = cleanText.split(/([.!?。、,，;；])\s*/);
     const chunks: string[] = [];
     let currentChunk = '';
 
     for (const part of sentences) {
       if (!part) continue;
-      if ((currentChunk + part).length <= maxLen) {
+      // If it's single punctuation, bundle it to previous chunk
+      if (/^[.!?。、,，;；]$/.test(part)) {
         currentChunk += part;
+        continue;
+      }
+
+      if ((currentChunk + ' ' + part).length <= maxLen) {
+        currentChunk = currentChunk ? currentChunk + ' ' + part : part;
       } else {
         if (currentChunk.trim()) {
           chunks.push(currentChunk.trim());
         }
         if (part.length > maxLen) {
           const words = part.split(/\s+/);
+          currentChunk = '';
           for (const word of words) {
             if ((currentChunk + ' ' + word).trim().length <= maxLen) {
               currentChunk = (currentChunk + ' ' + word).trim();
@@ -134,7 +142,7 @@ export const useTTS = () => {
     }
 
     try {
-      // Unstick SpeechSynthesis in Chromium
+      // Unstick SpeechSynthesis in Chromium-based browsers
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
@@ -152,16 +160,26 @@ export const useTTS = () => {
 
       utterance.rate = lang === 'en' ? 0.95 : 0.85;
       
-      // GC protection
+      // Protect utterance from premature garbage collection in Chrome
       (window as any).activeUtterance = utterance;
 
+      let completed = false;
+      const handleCompleted = () => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(safetyTimer);
+        (window as any).activeUtterance = null;
+        onEnded();
+      };
+
+      // Proportional safety timeout for active playback (120ms per character + 6s startup buffer)
+      const safetyDuration = Math.max(12000, chunkText.length * 120 + 6000);
       let safetyTimer = setTimeout(() => {
         if (mySequenceId === currentSequenceId) {
-          console.warn('[TTS-Fallback] SpeechSynthesis safety timeout reached.');
-          (window as any).activeUtterance = null;
-          onEnded();
+          console.warn('[TTS-Fallback] SpeechSynthesis safety timeout reached for:', chunkText);
+          handleCompleted();
         }
-      }, 4000); 
+      }, safetyDuration); 
 
       utterance.onstart = () => {
         if (mySequenceId === currentSequenceId) {
@@ -170,19 +188,15 @@ export const useTTS = () => {
       };
 
       utterance.onend = () => {
-        clearTimeout(safetyTimer);
-        (window as any).activeUtterance = null;
         if (mySequenceId === currentSequenceId) {
-          onEnded();
+          handleCompleted();
         }
       };
 
       utterance.onerror = (e) => {
         console.warn('[TTS-Fallback] SpeechSynthesis error:', e);
-        clearTimeout(safetyTimer);
-        (window as any).activeUtterance = null;
         if (mySequenceId === currentSequenceId) {
-          onEnded();
+          handleCompleted();
         }
       };
 
@@ -250,36 +264,32 @@ export const useTTS = () => {
 
         const currentChunk = chunks[index];
 
-        // --- GLOBAL SAFETY GUARD ---
-        // Guaranteed to release loading state and move forward after max 4.5 seconds per chunk
+        // Track chunk completion status to avoid duplicate progression
         let chunkCompleted = false;
-        const safetyTimer = setTimeout(() => {
-          if (mySequenceId === currentSequenceId && !chunkCompleted) {
-            console.warn(`[TTS-Safety] 4.5s threshold reached on chunk ${index}. Bypassing loader.`);
-            chunkCompleted = true;
-            setIsLoading(false);
-            index++;
-            playNextChunk();
-          }
-        }, 4500);
+        let loadingTimer: any = null;
+        let playbackSafetyTimer: any = null;
 
         const onChunkCompleted = () => {
           if (chunkCompleted) return;
           chunkCompleted = true;
-          clearTimeout(safetyTimer);
+          
+          // Clear all active timers for this chunk
+          if (loadingTimer) clearTimeout(loadingTimer);
+          if (playbackSafetyTimer) clearTimeout(playbackSafetyTimer);
+          
           if (mySequenceId === currentSequenceId) {
             index++;
             playNextChunk();
           }
         };
 
-        // Browser mode goes straight to local voice Synthesis
+        // Browser mode goes straight to local voice SpeechSynthesis
         if (activeMode === 'browser') {
           fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           return;
         }
 
-        // AI Mode: Same-Origin Server Proxy URL (Absolute bulletproof against CORS and sandboxed browser policies)
+        // AI Mode Setup: Same-Origin API Proxy URL
         const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
         const audio = getGlobalAudio();
 
@@ -294,9 +304,41 @@ export const useTTS = () => {
         audio.onerror = null;
         audio.oncanplay = null;
 
+        // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
+        loadingTimer = setTimeout(() => {
+          if (mySequenceId === currentSequenceId && !chunkCompleted) {
+            console.warn(`[TTS-Loading-Timeout] Slow network/error loading chunk ${index}. Switching to SpeechSynthesis fallback.`);
+            
+            // Clean/Pause the audio tag before fallback so it doesn't cross-speak later
+            audio.onplay = null;
+            audio.onended = null;
+            audio.onerror = null;
+            try { audio.pause(); } catch(e){}
+            
+            fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
+          }
+        }, 4000);
+
         audio.onplay = () => {
           if (mySequenceId === currentSequenceId) {
             setIsLoading(false);
+            
+            // Success! Clear the loading timeout
+            if (loadingTimer) {
+              clearTimeout(loadingTimer);
+              loadingTimer = null;
+            }
+            
+            // Set a generous fallback playback safety timer proportional to character length
+            // (140ms per character + generous 8s safety margin)
+            const playDuration = Math.max(16000, currentChunk.length * 140 + 8000);
+            if (playbackSafetyTimer) clearTimeout(playbackSafetyTimer);
+            playbackSafetyTimer = setTimeout(() => {
+              if (mySequenceId === currentSequenceId && !chunkCompleted) {
+                console.warn(`[TTS-Playback-Timeout] Active playback safety limit reached for chunk ${index}. Advancing to release UI.`);
+                onChunkCompleted();
+              }
+            }, playDuration);
           }
         };
 
@@ -306,26 +348,54 @@ export const useTTS = () => {
 
         audio.onerror = (err) => {
           if (chunkCompleted) return;
-          console.warn(`[TTS-Proxy-Error] Same-origin proxy delivery failed or blocked. trying direct url.`, err);
+          console.warn(`[TTS-Proxy-Error] Same-origin proxy failed or blocked. Trying direct cloud url.`, err);
           
-          // Retry direct cloud provider URL (some corporate/strict proxies might block specific server endpoints)
+          if (loadingTimer) {
+            clearTimeout(loadingTimer);
+            loadingTimer = null;
+          }
+          
+          // Retry direct cloud provider URL as backup
           const directUrl = targetLang === 'en'
             ? `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(currentChunk)}`
             : `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(currentChunk)}`;
 
+          audio.onplay = null;
+          audio.onended = null;
+          audio.onerror = null;
+
+          let retryLoadingTimer = setTimeout(() => {
+            if (mySequenceId === currentSequenceId && !chunkCompleted) {
+              console.warn(`[TTS-Retry-Loading-Timeout] Direct URL load stalled. Defaulting to voice synthesis.`);
+              try { audio.pause(); } catch(e){}
+              fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
+            }
+          }, 3500);
+
           audio.onplay = () => {
             if (mySequenceId === currentSequenceId) {
               setIsLoading(false);
+              clearTimeout(retryLoadingTimer);
+              
+              const playDuration = Math.max(16000, currentChunk.length * 140 + 8000);
+              if (playbackSafetyTimer) clearTimeout(playbackSafetyTimer);
+              playbackSafetyTimer = setTimeout(() => {
+                if (mySequenceId === currentSequenceId && !chunkCompleted) {
+                  onChunkCompleted();
+                }
+              }, playDuration);
             }
           };
 
           audio.onended = () => {
+            clearTimeout(retryLoadingTimer);
             onChunkCompleted();
           };
 
           audio.onerror = () => {
             if (chunkCompleted) return;
-            console.warn(`[TTS-Fallback] Direct URL failed too. Activating SpeechSynthesis as final resort...`);
+            clearTimeout(retryLoadingTimer);
+            console.warn(`[TTS-Fallback] Direct URL also failed. Launching browser SpeechSynthesis...`);
             fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           };
 
@@ -333,11 +403,12 @@ export const useTTS = () => {
           audio.load();
           audio.play().catch(() => {
             if (chunkCompleted) return;
+            clearTimeout(retryLoadingTimer);
             fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           });
         };
 
-        // Kick off audio play
+        // Kick off original audio proxy request
         audio.src = proxyUrl;
         audio.load();
         
@@ -347,7 +418,11 @@ export const useTTS = () => {
 
         audio.play().catch(playErr => {
           if (chunkCompleted) return;
-          console.warn(`[TTS-Autoplay-Blocked] Same-origin auto-play blocked by browser policy. Falling back to SpeechSynthesis.`, playErr);
+          if (loadingTimer) {
+            clearTimeout(loadingTimer);
+            loadingTimer = null;
+          }
+          console.warn(`[TTS-Autoplay-Blocked] Autoplay blocked by browser. Falling back to SpeechSynthesis.`, playErr);
           fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
         });
       };
