@@ -451,7 +451,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         };
     }, []);
 
-    const handlePlayEnglishTTS = async (message: Message | { id: string; text: string }) => {
+    const handlePlayEnglishTTS = (message: Message | { id: string; text: string }) => {
         if (isSpeakingMessageId === message.id) {
             stopTTS();
             setIsSpeakingMessageId(null);
@@ -459,16 +459,12 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
 
         setIsSpeakingMessageId(message.id);
-        try {
-            await playTTS(message.text, ttsMode);
+        playTTS(message.text, ttsMode, () => {
             setIsSpeakingMessageId(null);
-        } catch (e: any) { 
-            setIsSpeakingMessageId(null); 
-            setToastMessage({ message: e.message || "Không thể phát âm thanh lúc này.", type: "error" });
-        }
+        });
     };
 
-    const handlePlayTranslatedTTS = async (message: Message) => {
+    const handlePlayTranslatedTTS = (message: Message) => {
         if (!message.translation) return;
         const playId = `trans-${message.id}`;
         if (isSpeakingMessageId === playId) {
@@ -478,14 +474,10 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
 
         setIsSpeakingMessageId(playId);
-        try {
-            // Force browser TTS for Vietnamese translation
-            await playTTS(message.translation, 'browser');
+        // Force browser TTS for Vietnamese translation
+        playTTS(message.translation, 'browser', () => {
             setIsSpeakingMessageId(null);
-        } catch (e: any) { 
-            setIsSpeakingMessageId(null);
-            setToastMessage({ message: e.message || "Lỗi phát bản dịch.", type: "error" });
-        }
+        });
     };
 
     const fileInputRef = useRef<HTMLInputElement>(null);

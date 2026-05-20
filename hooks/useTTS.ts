@@ -11,11 +11,15 @@ export const useTTS = () => {
 
   const isVietnamese = (txt: string) => {
     // Check for unique Vietnamese accent characters
-    const viChars = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸYĐ]/;
+    const viChars = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮClarẵặÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝYĐ]/;
     return viChars.test(txt);
   };
 
-  const playTTS = async (text: string, mode: TTSMode = 'ai') => {
+  const playTTS = async (
+    text: string, 
+    mode: TTSMode = 'ai', 
+    onEndCallback?: () => void
+  ) => {
     // 1. Stop any currently active text-to-speech audio 
     stopTTS();
 
@@ -29,79 +33,47 @@ export const useTTS = () => {
       const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
       if (!cleanText) {
         setIsLoading(false);
+        onEndCallback?.();
         return;
       }
 
-      // Split the text into comfortable chunks under 180 characters to comply with Translate TTS maximum length
-      const maxLen = 180;
-      const chunks: string[] = [];
-      
-      if (cleanText.length <= maxLen) {
-        chunks.push(cleanText);
-      } else {
-        const words = cleanText.split(' ');
-        let currentChunk = '';
-        for (const word of words) {
-          if ((currentChunk + ' ' + word).length > maxLen) {
-            chunks.push(currentChunk.trim());
-            currentChunk = word;
-          } else {
-            currentChunk = currentChunk ? currentChunk + ' ' + word : word;
-          }
-        }
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-        }
-      }
+      if (targetLang === 'en') {
+        // Play English text via highly reliable Youdao voice (US Accent, supports CORS, no blocking)
+        const url = `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(cleanText)}`;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        activeAudio = audio;
 
-      if (chunks.length > 0) {
-        let currentIdx = 0;
-
-        const playNextChunk = () => {
-          if (currentIdx >= chunks.length) {
-            setIsLoading(false);
-            return;
-          }
-
-          const chunkText = chunks[currentIdx];
-          const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${targetLang}&client=tw-ob&q=${encodeURIComponent(chunkText)}`;
-          
-          const audio = new Audio(url);
-          audioRef.current = audio;
-          activeAudio = audio;
-
-          audio.onended = () => {
-            currentIdx++;
-            playNextChunk();
-          };
-
-          audio.onerror = (e) => {
-            console.warn(`[TTS-Fallback] Google Translate TTS chunk failed. Utilizing local SpeechSynthesis. Details:`, e);
-            fallbackSpeechSynthesis(chunkText, targetLang);
-            currentIdx++;
-            setTimeout(playNextChunk, 1000);
-          };
-
-          audio.play().catch((playErr) => {
-            console.warn(`[TTS-Fallback] Audio autoplay was blocked. Reverting to browser speechSynthesis:`, playErr);
-            fallbackSpeechSynthesis(chunkText, targetLang);
-            currentIdx++;
-            setTimeout(playNextChunk, 1000);
-          });
+        audio.onplay = () => {
+          setIsLoading(false);
         };
 
-        playNextChunk();
-        return;
+        audio.onended = () => {
+          setIsLoading(false);
+          onEndCallback?.();
+        };
+
+        audio.onerror = (e) => {
+          console.warn(`[TTS-Youdao] Failed to load audio, using SpeechSynthesis fallback:`, e);
+          fallbackSpeechSynthesis(cleanText, 'en', onEndCallback);
+        };
+
+        // Attempt to play audio
+        await audio.play();
+      } else {
+        // Vietnamese text: fallback to local SpeechSynthesis
+        fallbackSpeechSynthesis(cleanText, 'vi', onEndCallback);
       }
     } catch (err) {
-      console.error("[TTS] Failed initializing Google Audio TTS. Falling back to SpeechSynthesis.", err);
-      fallbackSpeechSynthesis(text, isVietnamese(text) ? 'vi' : 'en');
+      console.warn("[TTS] Error during initialization, utilizing fallback:", err);
+      fallbackSpeechSynthesis(text, isVietnamese(text) ? 'vi' : 'en', onEndCallback);
     }
   };
 
-  const fallbackSpeechSynthesis = (text: string, lang: string) => {
+  const fallbackSpeechSynthesis = (text: string, lang: string, onEndCallback?: () => void) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       setIsLoading(false);
+      onEndCallback?.();
       return;
     }
     
@@ -117,11 +89,23 @@ export const useTTS = () => {
       }
       
       utterance.rate = 1.0;
+
+      utterance.onend = () => {
+        setIsLoading(false);
+        onEndCallback?.();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("[TTS] SpeechSynthesis playback error:", e);
+        setIsLoading(false);
+        onEndCallback?.();
+      };
+
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.error("[TTS] SpeechSynthesis fallback failed:", e);
-    } finally {
       setIsLoading(false);
+      onEndCallback?.();
     }
   };
 
