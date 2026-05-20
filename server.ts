@@ -208,74 +208,76 @@ async function startServer() {
       }
 
       let activeModel = GEMINI_MODEL;
-      console.log(`[Omni-SDK-v3] Calling Gemini via Dev Server with starting model: ${activeModel}`);
+      console.log(`[Omni-SDK-v3] Initial dev server model request: ${activeModel}`);
       
       let response;
-      try {
-        response = await ai.models.generateContent({ 
-          model: activeModel,
-          contents: finalContents,
-          config: {
-            systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
-            temperature: 0.7,
-            topP: 0.95,
-            topK: 64,
-            maxOutputTokens: 2048,
-            safetySettings: [
-              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-            ]
-          }
-        });
-      } catch (apiErr: any) {
-        console.warn("[Omni-SDK-v3] Primary generation failed on dev server. Root details:", apiErr?.message || apiErr);
-        
-        const isModelOr404Error = 
-          apiErr.status === 404 || 
-          apiErr.code === 404 || 
-          String(apiErr).toLowerCase().includes("not found") || 
-          String(apiErr).toLowerCase().includes("not_found") || 
-          String(apiErr).toLowerCase().includes("support");
+      let fallbackModels = [
+        activeModel,
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-2.0-flash-lite-preview",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash"
+      ];
+      // Remove duplicates but keep primary order intact
+      fallbackModels = Array.from(new Set(fallbackModels));
 
-        if (isModelOr404Error) {
-          console.log("[Omni-SDK-v3] Attempting model discovery fallback on dev server...");
-          const discoveredModel = await getBestAvailableModel(ai, GEMINI_MODEL);
-          if (discoveredModel !== activeModel) {
-            activeModel = discoveredModel;
-            console.log(`[Omni-SDK-v3] Re-trying dev-server generation using discovered model: ${activeModel}`);
-            try {
-              response = await ai.models.generateContent({ 
-                model: activeModel,
-                contents: finalContents,
-                config: {
-                  systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
-                  temperature: 0.7,
-                }
-              });
-            } catch (retryErr: any) {
-              console.error("[Omni-SDK-v3] Discovered model retry failed on dev server:", retryErr);
-              throw apiErr;
+      let lastError = null;
+      for (let i = 0; i < fallbackModels.length; i++) {
+        const modelToTry = fallbackModels[i];
+        console.log(`[Omni-SDK-v3] Dev Server generation effort (Attempt ${i + 1}/${fallbackModels.length}) using Model: ${modelToTry}`);
+        try {
+          response = await ai.models.generateContent({ 
+            model: modelToTry,
+            contents: finalContents,
+            config: {
+              systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
+              temperature: 0.7,
+              topP: 0.95,
+              topK: 64,
+              maxOutputTokens: 2048, // Keeping dev responses optimized
+              safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+              ]
             }
-          } else {
-            // Last resort simplified call
-            try {
-              console.warn("[Omni-SDK-v3] Simple fallback attempt with direct generateContent...");
-              response = await ai.models.generateContent({ 
-                model: GEMINI_MODEL,
-                contents: finalContents,
-                config: { systemInstruction: systemInstruction ? String(systemInstruction) : undefined }
-              });
-            } catch(e) {
-              response = await ai.models.generateContent({ 
-                model: GEMINI_MODEL,
-                contents: finalContents
-              });
-            }
+          });
+          
+          activeModel = modelToTry;
+          lastError = null;
+          console.log(`[Omni-SDK-v3] Dev Server generation successful with model: ${modelToTry}`);
+          break;
+        } catch (err: any) {
+          lastError = err;
+          const errStr = String(err).toLowerCase();
+          const isRateLimit = err.status === 429 || err.code === 429 || errStr.includes("429") || errStr.includes("exhausted") || errStr.includes("quota") || errStr.includes("rate limit") || errStr.includes("limit_exceeded");
+          const isNotFoundError = err.status === 404 || err.code === 404 || errStr.includes("404") || errStr.includes("not found") || errStr.includes("not_found") || errStr.includes("unsupported");
+
+          console.warn(`[Omni-SDK-v3] Dev Server attempt ${i + 1} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
+          
+          if (isRateLimit && i < fallbackModels.length - 1) {
+            console.log("[Omni-SDK-v3] Quota limit hit. Sleeping 600ms before falling back to next prioritized model...");
+            await new Promise(resolve => setTimeout(resolve, 600));
           }
-        } else {
-          throw apiErr;
+        }
+      }
+
+      if (lastError && !response) {
+        console.warn("[Omni-SDK-v3] Primary dev server model cascade failed. Attempting absolute emergency bypass call with standard gemini-1.5-flash...");
+        try {
+          response = await ai.models.generateContent({
+            model: "gemini-1.5-flash",
+            contents: finalContents
+          });
+        } catch (finalErr: any) {
+          console.error("[Omni-SDK-v3] Dev server emergency bypass failed as well: ", finalErr);
+          const isQuota = String(finalErr).toLowerCase().includes("exhausted") || String(finalErr).toLowerCase().includes("quota") || String(finalErr).toLowerCase().includes("429");
+          if (isQuota) {
+            throw new Error("Tài khoản API Key đang hết lượt dùng (RESOURCE_EXHAUSTED). Vui lòng đợi khoảng 15-30 giây để hệ thống tự động thiết lập lại quota. Nhờ kiến trúc tối ưu tự động của Omni, hệ thống sẽ tự khôi phục sau giây lát!");
+          }
+          throw finalErr;
         }
       }
       
