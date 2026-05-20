@@ -70,14 +70,11 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
     setIsUploading(true);
 
     try {
-      const results: UploadItem[] = [];
       const fileArray = Array.from(files);
       
       for (let i = 0; i < fileArray.length; i++) {
         const file = fileArray[i];
         
-        // Vercel limit is 4.5MB, Base64 adds ~33% overhead.
-        // For AI Studio environment, we can handle more, but let's be safe.
         if (file.size > 10 * 1024 * 1024) {
           alert(`Tệp ${file.name} quá lớn (tối đa 10MB).`);
           continue;
@@ -90,37 +87,35 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
         formData.append('name', file.name);
         formData.append('mimeType', file.type);
 
-        console.log(`Tải lên tệp: ${file.name}, type: ${file.type}, size: ${file.size}`);
         setUploadStatus(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
 
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
 
-        const responseText = await res.text();
-        if (!res.ok) {
-          let errMsg = responseText;
-          try {
-            const js = JSON.parse(responseText);
-            errMsg = js.error || JSON.stringify(js);
-          } catch(e) {}
-          
-          if (res.status === 413) {
-            errMsg = "Tệp quá dung lượng (Server Limit). Hãy thử tệp nhỏ hơn.";
+          const responseText = await res.text();
+          if (!res.ok) {
+            let errMsg = responseText;
+            try {
+              const js = JSON.parse(responseText);
+              errMsg = js.error || JSON.stringify(js);
+            } catch(e) {}
+            throw new Error(errMsg);
           }
           
-          throw new Error(`Lỗi tải tệp ${file.name}: ${errMsg}`);
+          const data = JSON.parse(responseText);
+          const newItem: UploadItem = { type: 'file' as const, uri: data.fileUri, mime: data.mimeType, name: data.name };
+          setItems(prev => [...prev, newItem]);
+        } catch (fileErr: any) {
+          console.error(`Lỗi tải tệp ${file.name}:`, fileErr);
+          alert(`Không thể tải tệp ${file.name}: ${fileErr.message}`);
         }
-        
-        const data = JSON.parse(responseText);
-        results.push({ type: 'file' as const, uri: data.fileUri, mime: data.mimeType, name: data.name });
       }
-
-      setItems(prev => [...prev, ...results]);
     } catch (err: any) {
-      console.error(err);
-      alert(`Tải lên tệp thất bại: ${err.message || 'Vui lòng thử lại'}`);
+      console.error("General upload error:", err);
+      alert(`Đã xảy ra lỗi: ${err.message}`);
     } finally {
       setIsUploading(false);
       setUploadStatus('');

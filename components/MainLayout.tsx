@@ -21,7 +21,19 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
+  
+  // React to prop changes (essential for transitions from Upload to Main)
+  useEffect(() => {
+    setProgress(initialProgress);
+  }, [initialProgress]);
+
   const [currentSection, setCurrentSection] = useState<SectionId>(initialProgress.currentSection || SectionId.LIBRARY);
+  
+  useEffect(() => {
+    if (initialProgress.currentSection) {
+      setCurrentSection(initialProgress.currentSection);
+    }
+  }, [initialProgress.currentSection]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default false for mobile
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 

@@ -131,56 +131,78 @@ async function startServer() {
       }
 
       const ai = getGenAI();
-      console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
+      console.log(`[Omni-SDK-v3] Calling Gemini via Dev Server with model: ${GEMINI_MODEL}`);
       
-      const finalContents = contents.map((c: any) => ({
-        role: c.role === 'model' ? 'model' : 'user',
-        parts: (c.parts || []).filter((p: any) => (p.text && String(p.text).trim()) || p.inlineData || p.fileData).map((p: any) => {
+      const finalContents = contents.map((c: any) => {
+        const role = c.role === 'model' ? 'model' : 'user';
+        const parts = (c.parts || []).filter((p: any) => 
+          (p.text && String(p.text).trim()) || p.inlineData || p.fileData
+        ).map((p: any) => {
           if (p.text !== undefined) return { text: String(p.text).trim() };
           if (p.inlineData) return { inlineData: p.inlineData };
           if (p.fileData) return { fileData: p.fileData };
           return p;
-        })
-      })).filter((c: any) => c.parts && c.parts.length > 0);
+        });
+        return { role, parts };
+      }).filter((c: any) => c.parts && c.parts.length > 0);
 
       if (finalContents.length === 0) {
         console.error("Total failure: No valid parts to send");
-        return res.status(400).json({ error: "No valid content to send to Gemini" });
+        return res.status(400).json({ error: "Không tìm thấy nội dung hợp lệ (Check console logs)" });
       }
 
       console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API via Antigravity...`);
       
-      const response = await ai.models.generateContent({ 
-        model: GEMINI_MODEL,
-        contents: finalContents,
-        config: {
-          systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined,
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-          ]
+      try {
+        // According to official Gemini API wire format, system_instruction is top-level.
+        // Antigravity SDK might expect it inside config or top-level depending on version.
+        // We'll try top-level as it's more standard for the wire format it seems to be complaining about.
+        const response = await ai.models.generateContent({ 
+          model: GEMINI_MODEL,
+          contents: finalContents,
+          // Moving systemInstruction to top-level if config approach failed previously
+          systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction) }] } : undefined,
+          config: {
+            temperature: 0.7,
+            topP: 0.95,
+            topK: 64,
+            maxOutputTokens: 2048,
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+            ]
+          }
+        } as any);
+        
+        console.log("Gemini response received from Antigravity.");
+        
+        const candidate = response.candidates?.[0];
+        if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
+            console.warn("AI blocked by safety filters");
+            return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn." });
         }
-      });
-      
-      console.log("Gemini response received from Antigravity.");
-      
-      // Safety check
-      const candidate = response.candidates?.[0];
-      if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
-          console.warn("AI blocked by safety filters");
-          return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với nội dung khác lành mạnh hơn." });
+
+        const text = response.text;
+        if (!text) {
+          console.warn("Empty response text");
+          return res.json({ text: "Gia sư không thể phản hồi lúc này." });
+        }
+
+        res.json({ text });
+      } catch (apiErr: any) {
+        console.error("Gemini API Error (Dev):", apiErr);
+        if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction')) {
+          console.warn("Retrying without systemInstruction");
+          const response = await ai.models.generateContent({ 
+            model: GEMINI_MODEL,
+            contents: finalContents
+          });
+          return res.json({ text: response.text });
+        }
+        throw apiErr;
       }
-
-      const text = response.text;
-
-      if (!text) {
-        console.warn("Empty response text");
-        return res.json({ text: "Gia sư không thể đưa ra phản hồi lúc này. (Empty response)" });
-      }
-
-      res.json({ text });
     } catch (err: any) {
       console.error("Detailed /api/generate Error [Omni-SDK-v3]:", err);
       const errorMsg = err.message || "Unknown generate error";

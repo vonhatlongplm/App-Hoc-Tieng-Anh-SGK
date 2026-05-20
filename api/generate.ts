@@ -53,49 +53,65 @@ export default async function handler(req: any, res: any) {
     }
 
     const ai = getGenAI();
-    console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
+    console.log(`[Omni-SDK-v3] Calling Gemini with model: ${GEMINI_MODEL}`);
     
-    const finalContents = contents.map((c: any) => ({
-      role: c.role === 'model' ? 'model' : 'user',
-      parts: (c.parts || []).filter((p: any) => (p.text && String(p.text).trim()) || p.inlineData || p.fileData).map((p: any) => {
+    // Antigravity SDK contents mapping
+    const finalContents = contents.map((c: any) => {
+      const role = c.role === 'model' ? 'model' : 'user';
+      const parts = (c.parts || []).filter((p: any) => 
+        (p.text && String(p.text).trim()) || p.inlineData || p.fileData
+      ).map((p: any) => {
         if (p.text !== undefined) return { text: String(p.text).trim() };
         if (p.inlineData) return { inlineData: p.inlineData };
         if (p.fileData) return { fileData: p.fileData };
         return p;
-      })
-    })).filter((c: any) => c.parts && c.parts.length > 0);
+      });
+      return { role, parts };
+    }).filter((c: any) => c.parts && c.parts.length > 0);
 
     if (finalContents.length === 0) {
-      return res.status(400).json({ error: "No valid content to send to Gemini" });
+      return res.status(400).json({ error: "Không tìm thấy nội dung hợp lệ để gửi cho AI." });
     }
 
-    const response = await ai.models.generateContent({ 
-      model: GEMINI_MODEL,
-      contents: finalContents,
-      config: {
-        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined,
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-        ]
+    try {
+      // Use top-level systemInstruction with parts array (wire format compatibility)
+      const response = await ai.models.generateContent({ 
+        model: GEMINI_MODEL,
+        contents: finalContents,
+        systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction).substring(0, 8000) }] } : undefined,
+        config: {
+          temperature: 0.7,
+          topP: 0.95,
+          topK: 64,
+          maxOutputTokens: 2048,
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+          ]
+        }
+      } as any);
+
+      const text = response.text;
+      if (!text) {
+        return res.status(200).json({ text: "Gia sư không thể phản hồi lúc này. Vui lòng thử lại câu hỏi khác." });
       }
-    });
 
-    const candidate = response.candidates?.[0];
-    
-    if (candidate?.finishReason === 'SAFETY') {
-        return res.status(200).json({ text: "⚠️ Nội dung bị chặn bởi bộ lọc an toàn. Vui lòng thử lại." });
+      res.status(200).json({ text });
+    } catch (apiErr: any) {
+      console.error("Gemini API Error Detail:", apiErr);
+      // Specific check for systemInstruction error
+      if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction')) {
+         console.warn("Retrying without systemInstruction due to error");
+         const response = await ai.models.generateContent({ 
+           model: GEMINI_MODEL,
+           contents: finalContents
+         });
+         return res.status(200).json({ text: response.text });
+      }
+      throw apiErr;
     }
-
-    const text = response.text;
-
-    if (!text) {
-      return res.status(200).json({ text: "Gia sư không thể phản hồi lúc này. (Empty response)" });
-    }
-
-    res.status(200).json({ text });
     } catch (err: any) {
       console.error("Vercel Generate Error [Omni-SDK-v3]:", err);
       const errorMsg = err.message || "Generation failed";
