@@ -54,16 +54,6 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
     setPosition({ top, left, opacity: 1 });
   }, [selectionData, isSingleWord]);
 
-  // Handler tối ưu ngăn chặn trình duyệt hủy vùng chọn và thực hiện hành động
-  const handleAction = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent, callback: (t: string) => void) => {
-    // Ngăn chặn mất vùng chọn
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    
-    // Thực hiện hành động
-    callback(selectionData.text);
-  };
-
   const iconSize = window.innerWidth < 768 ? 28 : 24;
 
   return (
@@ -74,18 +64,20 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
         left: `${position.left}px`, 
         opacity: position.opacity,
         pointerEvents: position.opacity === 0 ? 'none' : 'auto',
-        touchAction: 'none'
       }}
       onPointerDown={(e) => e.stopPropagation()} 
       onMouseDown={(e) => e.preventDefault()} // Ngăn chặn mất vùng chọn trên desktop
-      onTouchStart={(e) => e.preventDefault()} // Ngăn chặn mất vùng chọn trên mobile
       className="fixed z-[9999] flex items-center gap-1 bg-slate-900/98 backdrop-blur-lg text-white p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] border border-slate-700 transition-all duration-300 select-none"
     >
       {isSingleWord && (
         <>
           <button
             type="button"
-            onPointerDown={(e) => handleAction(e, onLookup)}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onLookup(selectionData.text);
+            }}
             className="p-3 sm:p-3 rounded-xl hover:bg-teal-500/30 text-teal-400 transition-all active:scale-90 group"
             title="Tra cứu từ vựng"
           >
@@ -97,7 +89,13 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
       
       <button
         type="button"
-        onPointerDown={(e) => !isSpeaking && handleAction(e, onRead)}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!isSpeaking) {
+            onRead(selectionData.text);
+          }
+        }}
         className={`p-3 sm:p-3 rounded-xl hover:bg-slate-700 transition-all active:scale-90 group ${isSpeaking ? 'text-teal-400' : 'text-yellow-400 bg-yellow-400/10'}`}
         title="Đọc văn bản"
         disabled={isSpeaking}
@@ -109,7 +107,11 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
 
       <button
         type="button"
-        onPointerDown={(e) => handleAction(e, onTranslate)}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onTranslate(selectionData.text);
+        }}
         className="p-3 sm:p-3 rounded-xl hover:bg-blue-500/30 text-blue-400 transition-all active:scale-90 group"
         title="Dịch văn bản"
       >
@@ -120,7 +122,11 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
 
       <button
         type="button"
-        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose(); }}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         className="p-3 sm:p-3 rounded-xl hover:bg-red-500/30 text-slate-400 hover:text-red-400 transition-all active:scale-90"
         title="Đóng"
       >
