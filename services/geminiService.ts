@@ -91,14 +91,17 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
           if (idx > 10) return; 
 
           if (item.type === 'file' && item.uri) {
-            contents[contents.length - 1].parts.push({
-              fileData: {
-                fileUri: item.uri,
-                mimeType: item.mime || 'application/pdf'
-              }
-            } as any);
+            // Only add the first 3 files to context to speed up response and stay within limits
+            if (idx < 3) {
+              contents[contents.length - 1].parts.push({
+                fileData: {
+                  fileUri: item.uri,
+                  mimeType: item.mime || 'application/pdf'
+                }
+              } as any);
+            }
           } else if (item.type === 'text') {
-            textbookContext += `\n--- NỘI DUNG TÀI LIỆU (${item.name || 'Đoạn văn bản'}): ---\n${item.content.substring(0, 3000)}\n`;
+            textbookContext += `\n--- NỘI DUNG TÀI LIỆU: ---\n${item.content.substring(0, 1500)}\n`;
           }
         });
       } else {

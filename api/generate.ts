@@ -41,15 +41,15 @@ export default async function handler(req: any, res: any) {
 
     const ai = getGenAI();
     const model = ai.getGenerativeModel({ 
-      model: GEMINI_MODEL,
-      systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 10000) : undefined
+      model: "gemini-1.5-flash",
+      systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined
     });
 
     const safetySettings = [
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
     ] as any;
 
     const finalContents = contents.map((c: any) => ({
