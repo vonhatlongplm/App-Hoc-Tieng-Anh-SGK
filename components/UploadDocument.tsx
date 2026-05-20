@@ -20,6 +20,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStart = () => {
@@ -62,8 +63,9 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
   };
 
   const processFiles = async (files: FileList) => {
+    setErrorMessage(null);
     if (items.length + files.length > 20) {
-      alert("Bạn chỉ có thể tải lên tối đa 20 mục cùng lúc.");
+      setErrorMessage("Bạn chỉ có thể tải lên tối đa 20 mục cùng lúc.");
       return;
     }
 
@@ -76,7 +78,7 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
         const file = fileArray[i];
         
         if (file.size > 10 * 1024 * 1024) {
-          alert(`Tệp ${file.name} quá lớn (tối đa 10MB).`);
+          setErrorMessage(`Tệp ${file.name} quá lớn (tối đa 10MB).`);
           continue;
         }
 
@@ -110,12 +112,12 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
           setItems(prev => [...prev, newItem]);
         } catch (fileErr: any) {
           console.error(`Lỗi tải tệp ${file.name}:`, fileErr);
-          alert(`Không thể tải tệp ${file.name}: ${fileErr.message}`);
+          setErrorMessage(`Không thể tải tệp ${file.name}: ${fileErr.message}`);
         }
       }
     } catch (err: any) {
       console.error("General upload error:", err);
-      alert(`Đã xảy ra lỗi: ${err.message}`);
+      setErrorMessage(`Đã xảy ra lỗi: ${err.message}`);
     } finally {
       setIsUploading(false);
       setUploadStatus('');
@@ -145,6 +147,22 @@ export const UploadDocument: React.FC<UploadDocumentProps> = ({ onStart }) => {
             Tải lên Sách Giáo Khoa, Sách Bài Tập, Sách Giáo Viên hoặc copy dán văn bản để bắt đầu.
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="w-full mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 flex items-start justify-between gap-3 animate-fade-in">
+            <div className="flex-1 text-sm font-medium">
+              {errorMessage}
+              {errorMessage.includes("GEMINI_API_KEY") && (
+                <p className="mt-1 text-xs text-red-600 font-normal">
+                  Vui lòng thêm biến môi trường <code className="bg-red-100 px-1 py-0.5 rounded text-red-800">GEMINI_API_KEY</code> trong cài đặt trước khi tải lên.
+                </p>
+              )}
+            </div>
+            <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-600 p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <div className="w-full bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden text-left p-8">
           

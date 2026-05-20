@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { GEMINI_MODEL } from "../constants";
+
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 let genAI: any = null;
 
