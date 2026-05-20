@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL } from "../constants";
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: any = null;
 
 const getGenAI = () => {
   if (!genAI) {
@@ -9,10 +9,17 @@ const getGenAI = () => {
     if (!key) {
       throw new Error("GEMINI_API_KEY is not set.");
     }
-    genAI = new GoogleGenerativeAI(key.trim());
+    genAI = new GoogleGenAI({
+      apiKey: key.trim(),
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return genAI;
-};
+}
 
 export const config = {
   api: {
@@ -40,19 +47,8 @@ export default async function handler(req: any, res: any) {
     }
 
     const ai = getGenAI();
-    console.log(`Using model: ${GEMINI_MODEL}`);
-    const model = ai.getGenerativeModel({ 
-      model: GEMINI_MODEL,
-      systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined
-    }, { apiVersion: 'v1' });
-
-    const safetySettings = [
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-    ] as any;
-
+    console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
+    
     const finalContents = contents.map((c: any) => ({
       role: c.role === 'model' ? 'model' : 'user',
       parts: (c.parts || []).filter((p: any) => (p.text && String(p.text).trim()) || p.inlineData || p.fileData).map((p: any) => {
@@ -67,24 +63,27 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "No valid content to send to Gemini" });
     }
 
-    const result = await model.generateContent({ 
+    const response = await ai.models.generateContent({ 
+      model: GEMINI_MODEL,
       contents: finalContents,
-      safetySettings
+      config: {
+        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined,
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+        ]
+      }
     });
 
-    const response = await result.response;
     const candidate = response.candidates?.[0];
     
     if (candidate?.finishReason === 'SAFETY') {
         return res.status(200).json({ text: "⚠️ Nội dung bị chặn bởi bộ lọc an toàn. Vui lòng thử lại." });
     }
 
-    let text = "";
-    try {
-      text = response.text();
-    } catch (e) {
-      text = candidate?.finishReason ? `Lỗi AI (Lý do: ${candidate.finishReason})` : "Gia sư không thể phản hồi.";
-    }
+    const text = response.text;
 
     if (!text) {
       return res.status(200).json({ text: "Gia sư không thể phản hồi lúc này. (Empty response)" });
@@ -92,10 +91,10 @@ export default async function handler(req: any, res: any) {
 
     res.status(200).json({ text });
     } catch (err: any) {
-      console.error("Vercel Generate Error [TAG-V2.6]:", err);
-      const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Generation failed";
+      console.error("Vercel Generate Error [Antigravity SDK]:", err);
+      const errorMsg = err.message || "Generation failed";
       res.status(500).json({ 
-        error: `[TAG-V2.6] ${errorMsg}`,
+        error: `[Antigravity SDK] ${errorMsg}`,
         details: err.stack || ""
       });
     }

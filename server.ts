@@ -1,14 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
+import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import os from "os";
 import multer from "multer";
 import { GEMINI_MODEL } from "./constants";
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: any = null;
 let fileManager: GoogleAIFileManager | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
@@ -17,7 +17,14 @@ const getGenAI = () => {
   if (!genAI) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is missing");
-    genAI = new GoogleGenerativeAI(key.trim());
+    genAI = new GoogleGenAI({
+      apiKey: key.trim(),
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return genAI;
 };
@@ -118,19 +125,8 @@ async function startServer() {
       }
 
       const ai = getGenAI();
-      console.log(`Using model: ${GEMINI_MODEL}`);
-      const model = ai.getGenerativeModel({ 
-        model: GEMINI_MODEL,
-        systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined
-      }, { apiVersion: 'v1' });
+      console.log(`Using Antigravity SDK with model: ${GEMINI_MODEL}`);
       
-      const safetySettings = [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-      ] as any;
-
       const finalContents = contents.map((c: any) => ({
         role: c.role === 'model' ? 'model' : 'user',
         parts: (c.parts || []).filter((p: any) => (p.text && String(p.text).trim()) || p.inlineData || p.fileData).map((p: any) => {
@@ -146,34 +142,32 @@ async function startServer() {
         return res.status(400).json({ error: "No valid content to send to Gemini" });
       }
 
-      console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API...`);
+      console.log(`Prepared ${finalContents.length} message(s) for Gemini. Calling API via Antigravity...`);
       
-      const result = await model.generateContent({ 
+      const response = await ai.models.generateContent({ 
+        model: GEMINI_MODEL,
         contents: finalContents,
-        safetySettings
+        config: {
+          systemInstruction: systemInstruction ? String(systemInstruction).substring(0, 8000) : undefined,
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+          ]
+        }
       });
       
-      const response = await result.response;
-      console.log("Gemini response received.");
+      console.log("Gemini response received from Antigravity.");
       
-      // Safety check BEFORE response.text()
+      // Safety check
       const candidate = response.candidates?.[0];
       if (candidate?.finishReason && candidate.finishReason === 'SAFETY') {
           console.warn("AI blocked by safety filters");
           return res.json({ text: "⚠️ Nội dung này bị chặn bởi bộ lọc an toàn. Vui lòng thử lại với nội dung khác lành mạnh hơn." });
       }
 
-      let text = "";
-      try {
-        text = response.text();
-      } catch (e) {
-        console.warn("Error calling response.text():", e);
-        if (candidate?.finishReason) {
-            text = `Gia sư không thể phản hồi đúng cách. (Lý do dừng: ${candidate.finishReason})`;
-        } else {
-            text = "Gia sư gặp lỗi khi xử lý câu trả lời.";
-        }
-      }
+      const text = response.text;
 
       if (!text) {
         console.warn("Empty response text");
@@ -182,11 +176,10 @@ async function startServer() {
 
       res.json({ text });
     } catch (err: any) {
-      console.error("Detailed /api/generate Error [TAG-V2.6]:", err);
-      // Try to extract a useful message for the client
-      const errorMsg = err.response?.data?.error?.message || err.response?.error?.message || err.message || "Unknown generate error";
+      console.error("Detailed /api/generate Error [Antigravity SDK]:", err);
+      const errorMsg = err.message || "Unknown generate error";
       res.status(500).json({ 
-        error: `[TAG-V2.6] ${errorMsg}`,
+        error: `[Antigravity SDK] ${errorMsg}`,
         details: err.stack || ""
       });
     }
