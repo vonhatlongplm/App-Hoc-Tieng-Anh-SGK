@@ -78,11 +78,11 @@ export default async function handler(req: any, res: any) {
         model: GEMINI_MODEL,
         contents: finalContents,
         config: {
-          systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction).substring(0, 8000) }] } : undefined,
+          systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
           temperature: 0.7,
           topP: 0.95,
           topK: 64,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 8192,
           safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
@@ -94,6 +94,7 @@ export default async function handler(req: any, res: any) {
 
       const text = response.text;
       if (!text) {
+        console.warn("Gemini returned empty text response");
         return res.status(200).json({ text: "Gia sư không thể phản hồi lúc này. Vui lòng thử lại câu hỏi khác." });
       }
 
@@ -101,29 +102,18 @@ export default async function handler(req: any, res: any) {
     } catch (apiErr: any) {
       console.error("Gemini API Error Detail:", apiErr);
       
-      // Fallback for systemInstruction error or common SDK issues
-      if (apiErr.message?.includes('systemInstruction') || apiErr.message?.includes('system_instruction') || apiErr.message?.includes('wire_format')) {
-         console.warn("Retrying with raw systemInstruction string");
-         try {
-           const response = await ai.models.generateContent({ 
-             model: GEMINI_MODEL,
-             contents: finalContents,
-             config: {
-               systemInstruction: systemInstruction ? String(systemInstruction) : undefined
-             }
-           });
-           return res.status(200).json({ text: response.text });
-         } catch (secondErr) {
-           console.error("Second attempt failed:", secondErr);
-           // Final fallback: no system instruction
-           const finalResponse = await ai.models.generateContent({ 
-             model: GEMINI_MODEL,
-             contents: finalContents
-           });
-           return res.status(200).json({ text: finalResponse.text });
-         }
+      // Fallback for ANY error: try one more time with zero configuration to ensure it's not a config conflict
+      try {
+         console.warn("Retrying with minimal configuration...");
+         const fbResponse = await ai.models.generateContent({ 
+           model: GEMINI_MODEL,
+           contents: finalContents
+         });
+         return res.status(200).json({ text: fbResponse.text });
+      } catch (secondErr: any) {
+         console.error("Final fallback failed:", secondErr);
+         throw apiErr; // Throw original error for better debugging
       }
-      throw apiErr;
     }
     } catch (err: any) {
       console.error("Vercel Generate Error [Omni-SDK-v3]:", err);

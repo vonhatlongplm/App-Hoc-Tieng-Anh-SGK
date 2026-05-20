@@ -158,7 +158,7 @@ async function startServer() {
           model: GEMINI_MODEL,
           contents: finalContents,
           config: {
-            systemInstruction: systemInstruction ? { parts: [{ text: String(systemInstruction) }] } : undefined,
+            systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
             temperature: 0.7,
             topP: 0.95,
             topK: 64,
