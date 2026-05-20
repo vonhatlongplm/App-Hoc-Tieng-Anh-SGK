@@ -5,7 +5,7 @@ const MarkdownRenderer: React.FC<{
     text: string;
     onWordDoubleClick?: (event: React.MouseEvent, word: string) => void;
 }> = ({ text, onWordDoubleClick }) => {
-    const sanitizedText = text.replace(/<br\s*\/?>/gi, '\n').replace(/\\_/g, '_');
+    const sanitizedText = text.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/\\_/g, '_');
 
     const ensureHeadingSpacing = (txt: string): string => {
         const lines = txt.split('\n');
@@ -18,7 +18,7 @@ const MarkdownRenderer: React.FC<{
                 if (processedLines.length > 0 && processedLines[processedLines.length - 1].trim() !== '') {
                     processedLines.push('');
                 }
-                processedLines.push(line);
+                processedLines.push(line.trim());
                 if (i < lines.length - 1 && lines[i + 1].trim() !== '') {
                     processedLines.push('');
                 }
@@ -140,12 +140,37 @@ const MarkdownRenderer: React.FC<{
                 
                 return (
                     <p key={blockIndex}>
-                        {lines.map((line, lineIndex) => (
-                            <React.Fragment key={lineIndex}>
-                                {processInlineFormatting(line.trim().startsWith('* ') ? line.replace(/^\s*\*\s*/, '') : line, `p-${blockIndex}-${lineIndex}`)}
-                                {lineIndex < lines.length - 1 && <br />}
-                            </React.Fragment>
-                        ))}
+                        {lines.map((line, lineIndex) => {
+                            const trimmedLine = line.trim();
+                            // If a line in a paragraph block starts with heading marks, strip and style it correctly.
+                            const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.*)$/);
+                            if (headingMatch) {
+                                const level = headingMatch[1].length;
+                                const content = headingMatch[2];
+                                const key = `p-h-${level}-${blockIndex}-${lineIndex}`;
+                                const formatted = processInlineFormatting(content, key);
+                                
+                                let headingClass = "font-extrabold text-slate-800 block my-1.5 ";
+                                if (level === 1) headingClass += "text-2xl";
+                                else if (level === 2) headingClass += "text-xl";
+                                else if (level === 3) headingClass += "text-lg";
+                                else if (level === 4) headingClass += "text-base";
+                                else headingClass += "text-sm text-slate-600";
+                                
+                                return (
+                                    <span key={lineIndex} className={headingClass}>
+                                        {formatted}
+                                    </span>
+                                );
+                            }
+
+                            return (
+                                <React.Fragment key={lineIndex}>
+                                    {processInlineFormatting(trimmedLine.startsWith('* ') ? trimmedLine.replace(/^\s*\*\s*/, '') : line, `p-${blockIndex}-${lineIndex}`)}
+                                    {lineIndex < lines.length - 1 && <br />}
+                                </React.Fragment>
+                            );
+                        })}
                     </p>
                 );
             })}

@@ -246,25 +246,29 @@ export const useTTS = () => {
       const cleanTextForSpeech = (rawText: string) => {
         if (!rawText) return '';
         return rawText
-          // Remove markdown headers (e.g. ###, ####, etc.)
-          .replace(/^#+\s+/gm, '')
-          .replace(/#+/g, '') // Also remove any other raw hash symbols
-          // Remove images but keep alt text
+          // Strip image tags first ![alt](url) -> alt
           .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-          // Remove links but keep link text
+          // Strip link tags [text](url) -> text
           .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-          // Remove markdown emphasis characters (*, _, ~) but keep text
-          .replace(/\*{1,3}/g, '')
-          .replace(/_{1,3}/g, '')
-          // Remove inline code ticks
-          .replace(/`{1,3}/g, '')
-          // Remove blockquote symbol
+          // Remove backslash escapes entirely so they aren't spoken as "backslash"
+          .replace(/\\/g, '')
+          // Globally strip all asterisk markers (*) from bold/italic markup
+          .replace(/\*/g, '')
+          // Globally strip all underscore markers (_)
+          .replace(/_/g, '')
+          // Globally strip all hash title signs (#)
+          .replace(/#/g, '')
+          // Globally strip tilde signs (~)
+          .replace(/~/g, '')
+          // Globally strip backtick highlights (`)
+          .replace(/`/g, '')
+          // Remove blockquotes marker at the start of lines
           .replace(/^\s*>\s+/gm, '')
-          // Remove list bullets
+          // Remove list bullets / list indicators
           .replace(/^\s*[\*\-+]\s+/gm, '')
-          // Strip line fillers like __________
+          // Remove line separators like ____________
           .replace(/[\\_L]{3,}/g, '')
-          // Normalize spaces
+          // Normalize and compress repeated whitespace down to a single space
           .replace(/\s+/g, ' ')
           .trim();
       };
