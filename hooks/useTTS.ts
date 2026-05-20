@@ -11,13 +11,13 @@ export const useTTS = () => {
 
   const isVietnamese = (txt: string) => {
     // Check for unique Vietnamese accent characters
-    const viChars = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮClarẵặÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝYĐ]/;
+    const viChars = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮĂẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸYĐ]/;
     return viChars.test(txt);
   };
 
   const playTTS = async (
     text: string, 
-    mode: TTSMode = 'ai', 
+    mode?: TTSMode, 
     onEndCallback?: () => void
   ) => {
     // 1. Stop any currently active text-to-speech audio 
@@ -26,6 +26,9 @@ export const useTTS = () => {
     setIsLoading(true);
 
     try {
+      // Determine active mode (retrieve online preference dynamically if not provided)
+      const activeMode = mode || (typeof window !== 'undefined' ? (localStorage.getItem('vocab_tts_mode') as TTSMode) : 'ai') || 'ai';
+
       // Determine the ideal language
       const targetLang = isVietnamese(text) ? 'vi' : 'en';
 
@@ -37,10 +40,21 @@ export const useTTS = () => {
         return;
       }
 
+      // Check for forced browser mode
+      if (activeMode === 'browser') {
+        fallbackSpeechSynthesis(cleanText, targetLang, onEndCallback);
+        return;
+      }
+
       if (targetLang === 'en') {
         // Play English text via highly reliable Youdao voice (US Accent, supports CORS, no blocking)
         const url = `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(cleanText)}`;
-        const audio = new Audio(url);
+        const audio = new Audio();
+        
+        // Append to DOM to ensure playback works in sandboxed / iframe environments
+        audio.style.display = 'none';
+        document.body.appendChild(audio);
+
         audioRef.current = audio;
         activeAudio = audio;
 
@@ -48,18 +62,37 @@ export const useTTS = () => {
           setIsLoading(false);
         };
 
+        const cleanup = () => {
+          try {
+            if (audio.parentNode) {
+              audio.parentNode.removeChild(audio);
+            }
+          } catch (e) {}
+        };
+
         audio.onended = () => {
+          cleanup();
           setIsLoading(false);
           onEndCallback?.();
         };
 
         audio.onerror = (e) => {
+          cleanup();
           console.warn(`[TTS-Youdao] Failed to load audio, using SpeechSynthesis fallback:`, e);
           fallbackSpeechSynthesis(cleanText, 'en', onEndCallback);
         };
 
+        audio.src = url;
+        audio.load();
+
         // Attempt to play audio
-        await audio.play();
+        try {
+          await audio.play();
+        } catch (playErr) {
+          cleanup();
+          console.warn(`[TTS-Youdao] play() failed or was blocked, trying fallbackSpeechSynthesis:`, playErr);
+          fallbackSpeechSynthesis(cleanText, 'en', onEndCallback);
+        }
       } else {
         // Vietnamese text: fallback to local SpeechSynthesis
         fallbackSpeechSynthesis(cleanText, 'vi', onEndCallback);
