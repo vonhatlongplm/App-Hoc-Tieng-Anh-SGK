@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TextbookMetadata, Message, VocabularyWord, SectionId } from '../types';
 import LessonView from './LessonView';
-import { Book, FileText, ChevronRight, ChevronLeft, Search } from 'lucide-react';
+import { Book, FileText, ChevronRight, ChevronLeft, Search, Plus, Loader2, AlertCircle } from 'lucide-react';
 
 interface ResearchViewProps {
   material: TextbookMetadata;
@@ -17,6 +17,7 @@ interface ResearchViewProps {
   setToastMessage: (t: any) => void;
   onRestart: () => void;
   currentSection: SectionId;
+  onUpdateMaterial?: (materialId: string, updatedContent: string) => void;
 }
 
 export const ResearchView: React.FC<ResearchViewProps> = (props) => {
@@ -31,18 +32,143 @@ export const ResearchView: React.FC<ResearchViewProps> = (props) => {
     items = [{ type: 'text', content: material.content }];
   }
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingExt, setIsUploadingExt] = useState(false);
+  const [uploadStatusExt, setUploadStatusExt] = useState('');
+  const [errorMsgExt, setErrorMsgExt] = useState<string | null>(null);
+
+  const handleAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setErrorMsgExt(null);
+
+    setIsUploadingExt(true);
+    try {
+      const fileArray = Array.from(files);
+      const newlyUploaded: any[] = [];
+      
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        if (file.size > 10 * 1024 * 1024) {
+          setErrorMsgExt(`Tệp ${file.name} quá lớn (tối đa 10MB).`);
+          continue;
+        }
+
+        setUploadStatusExt(`Đang tải lên ${i + 1}/${fileArray.length}: ${file.name}...`);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name);
+        formData.append('mimeType', file.type);
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const responseText = await res.text();
+        if (!res.ok) {
+          let errMsg = responseText;
+          try {
+            const js = JSON.parse(responseText);
+            errMsg = js.error || JSON.stringify(js);
+          } catch(e) {}
+          throw new Error(errMsg);
+        }
+        
+        const data = JSON.parse(responseText);
+        newlyUploaded.push({
+          type: 'file',
+          uri: data.fileUri,
+          mime: data.mimeType,
+          name: data.name
+        });
+      }
+
+      if (newlyUploaded.length > 0) {
+        // Appends to the currently active items
+        const updatedItems = [...items, ...newlyUploaded];
+        const newContentString = JSON.stringify(updatedItems);
+        
+        if (props.onUpdateMaterial) {
+          props.onUpdateMaterial(material.id, newContentString);
+          props.setToastMessage({
+            message: `Đã thêm thành công ${newlyUploaded.length} tệp nghiên cứu mới!`,
+            type: 'success'
+          });
+          
+          props.addMessage({
+            id: `ai-notice-${Date.now()}`,
+            role: 'model',
+            text: `📝 **[Hệ thống]** Thầy/Cô đã tiếp nhận thêm ${newlyUploaded.length} tài liệu học tập mới vào bài học "${material.bookName} - ${material.unit}". Thầy/Cô sẽ kết hợp các thông tin từ tài liệu mới này để hướng dẫn và giải bài cho em nhé!`,
+            timestamp: Date.now()
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error("Add files to active material error:", err);
+      setErrorMsgExt(`Không thể thêm tệp: ${err.message || err}`);
+    } finally {
+      setIsUploadingExt(false);
+      setUploadStatusExt('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-white">
       {/* Document Panel */}
       <div className={`${isDocPanelOpen ? 'w-1/3' : 'w-0'} transition-all duration-300 border-r border-slate-200 flex flex-col bg-slate-50 relative overflow-hidden`}>
-         <header className="p-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+         <header className="p-4 border-b border-slate-200 bg-white flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 overflow-hidden">
                 <FileText className="text-teal-600 shrink-0" size={18} />
-                <h3 className="font-bold text-sm text-slate-800 truncate">{material.bookName} - {material.unit}</h3>
+                <h3 className="font-bold text-sm text-slate-800 truncate pr-1" title={`${material.bookName} - ${material.unit}`}>{material.bookName} - {material.unit}</h3>
             </div>
+            
+            {props.onUpdateMaterial && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingExt}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-teal-600 hover:text-white bg-teal-50 hover:bg-teal-600 active:scale-95 disabled:opacity-50 rounded-lg transition-all shrink-0 cursor-pointer"
+                title="Thêm tệp (Đáp án, Sách bài tập...) vào phiên học này"
+              >
+                <Plus size={13} />
+                <span>Thêm tệp</span>
+              </button>
+            )}
          </header>
          
          <div className="flex-1 overflow-y-auto p-6 space-y-8 select-text">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleAddFiles}
+              className="hidden" 
+              accept="application/pdf,image/*,.doc,.docx,text/plain" 
+              multiple
+            />
+
+            {isUploadingExt && (
+              <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-center gap-3 animate-pulse">
+                <Loader2 className="w-5 h-5 animate-spin text-teal-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-teal-800 uppercase tracking-wider">Đang cập nhật giáo trình...</p>
+                   <p className="text-xs text-slate-600 truncate">{uploadStatusExt}</p>
+                </div>
+              </div>
+            )}
+
+            {errorMsgExt && (
+              <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-start gap-2.5 text-rose-700 text-xs font-medium">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold">Lỗi thêm tài liệu</p>
+                  <p className="mt-0.5 opacity-90">{errorMsgExt}</p>
+                </div>
+                <button onClick={() => setErrorMsgExt(null)} className="text-rose-400 hover:text-rose-600 font-bold shrink-0">✕</button>
+              </div>
+            )}
+
             {items.map((item, idx) => (
                 <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 group relative">
                     {item.type === 'file' ? (

@@ -105,6 +105,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
     }
   };
 
+  const handleUpdateMaterial = (matId: string, newContent: string) => {
+    const updated = (progress.uploadedMaterials || []).map(m => {
+      if (m.id === matId) {
+        return { ...m, content: newContent };
+      }
+      return m;
+    });
+    handleUpdateProgress({
+      uploadedMaterials: updated,
+      ...(progress.currentMaterialId === matId ? { documentContent: newContent } : {})
+    });
+  };
+
   const renderContent = () => {
     switch (currentSection) {
       case SectionId.LIBRARY:
@@ -163,6 +176,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             onBackToSyllabus={() => setCurrentSection(SectionId.LIBRARY)}
             setToastMessage={(toastObj) => setToast(toastObj as any)}
             onRestart={() => handleUpdateProgress({ messages: [] })}
+            onUpdateMaterial={handleUpdateMaterial}
           />
         );
       case SectionId.MY_VOCABULARY:
