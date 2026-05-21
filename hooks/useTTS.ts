@@ -442,7 +442,7 @@ export const useTTS = () => {
           let audioBlob: Blob | null = null;
           let isFromCache = false;
 
-          // Try checking the browser CacheStorage first
+          // Try checking the browser CacheStorage first (without blocking if not present)
           if (typeof window !== 'undefined' && 'caches' in window) {
             try {
               const cache = await window.caches.open('tts-audio-cache');
@@ -451,18 +451,20 @@ export const useTTS = () => {
                 audioBlob = await cachedResponse.blob();
                 isFromCache = true;
               } else {
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                  await cache.put(proxyUrl, response.clone());
-                  audioBlob = await response.blob();
-                }
+                // Do NOT block and await the fetch.
+                // Play proxy URL directly and cache asynchronously to preserve user gesture!
+                fetch(proxyUrl).then(response => {
+                  if (response.ok) {
+                    cache.put(proxyUrl, response).catch(() => {});
+                  }
+                }).catch(() => {});
               }
             } catch (e) {
               console.warn("[TTS-Cache] Error matching/saving to cache:", e);
             }
           }
 
-          if (mySequenceId !== currentSequenceId || chunkCompleted) return;
+          if (mySequenceId !== currentSequenceId || chunkCompleted || fallbackInProgress) return;
 
           // If we successfully got a blob, load it as object URL
           if (audioBlob) {
@@ -470,7 +472,7 @@ export const useTTS = () => {
             currentPlayer.src = blobUrl;
             currentPlayer.load();
           } else {
-            // Uncached fallback
+            // Uncached fallback: load direct proxy URL instantly to keep user gesture
             currentPlayer.src = proxyUrl;
             currentPlayer.load();
           }
@@ -483,21 +485,22 @@ export const useTTS = () => {
           // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
           if (!isFromCache) {
             loadingTimer = setTimeout(() => {
-              if (mySequenceId === currentSequenceId && !chunkCompleted) {
+              if (mySequenceId === currentSequenceId && !chunkCompleted && !fallbackInProgress) {
                 triggerFallback("Loading timeout (4s)");
               }
             }, 4000);
           }
 
           currentPlayer.play().catch(playErr => {
-            if (chunkCompleted) return;
+            if (chunkCompleted || fallbackInProgress) return;
+            console.warn("[TTS] play() failed, triggering fallback", playErr);
             triggerFallback(`Autoplay blocked / playback error: ${playErr?.message || playErr}`);
           });
         };
 
         // Reset handlers
         currentPlayer.onplay = () => {
-          if (mySequenceId === currentSequenceId) {
+          if (mySequenceId === currentSequenceId && !fallbackInProgress) {
             setIsLoading(false);
             
             // Success! Clear the loading timeout
@@ -523,7 +526,7 @@ export const useTTS = () => {
         };
 
         currentPlayer.onerror = (err) => {
-          if (chunkCompleted) return;
+          if (chunkCompleted || fallbackInProgress) return;
           console.warn(`[TTS-Proxy-Error] Cache/proxy load failed or blocked. Trying direct cloud url.`, err);
           
           if (loadingTimer) {
@@ -541,13 +544,13 @@ export const useTTS = () => {
           currentPlayer.onerror = null;
 
           retryLoadingTimer = setTimeout(() => {
-            if (mySequenceId === currentSequenceId && !chunkCompleted) {
+            if (mySequenceId === currentSequenceId && !chunkCompleted && !fallbackInProgress) {
               triggerFallback("Retry direct URL load stalled (3.5s)");
             }
           }, 3500);
 
           currentPlayer.onplay = () => {
-            if (mySequenceId === currentSequenceId) {
+            if (mySequenceId === currentSequenceId && !fallbackInProgress) {
               setIsLoading(false);
               if (retryLoadingTimer) {
                 clearTimeout(retryLoadingTimer);
@@ -573,14 +576,14 @@ export const useTTS = () => {
           };
 
           currentPlayer.onerror = () => {
-            if (chunkCompleted) return;
+            if (chunkCompleted || fallbackInProgress) return;
             triggerFallback("Direct URL load failed");
           };
 
           currentPlayer.src = directUrl;
           currentPlayer.load();
           currentPlayer.play().catch((playErr) => {
-            if (chunkCompleted) return;
+            if (chunkCompleted || fallbackInProgress) return;
             triggerFallback(`Direct URL play catch: ${playErr?.message || playErr}`);
           });
         };
