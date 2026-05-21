@@ -452,7 +452,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     }, []);
 
     const handlePlayEnglishTTS = (message: Message | { id: string; text: string }) => {
-        if (isSpeakingMessageId === message.id) {
+        const isCurrentSelectionSpeaking = isSpeakingMessageId?.startsWith('sel-') && message.id.startsWith('sel-');
+        if (isSpeakingMessageId === message.id || isCurrentSelectionSpeaking) {
             stopTTS();
             setIsSpeakingMessageId(null);
             return;

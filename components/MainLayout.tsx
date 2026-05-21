@@ -135,10 +135,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             currentSection={currentSection}
             messages={progress.messages || []}
             addMessage={(msg) => {
-                const newMessages = [...(progress.messages || []), msg];
-                handleUpdateProgress({ messages: newMessages });
+                setProgress(prev => {
+                    const currentMsgs = prev.messages || [];
+                    return {
+                        ...prev,
+                        messages: [...currentMsgs, msg]
+                    };
+                });
             }}
-            setMessages={(msgs) => handleUpdateProgress({ messages: msgs as Message[] })}
+            setMessages={(msgs) => {
+                setProgress(prev => {
+                    const currentMsgs = prev.messages || [];
+                    const nextMsgs = typeof msgs === 'function' ? (msgs as any)(currentMsgs) : msgs;
+                    return {
+                        ...prev,
+                        messages: nextMsgs as Message[]
+                    };
+                });
+            }}
             savedVocabulary={progress.vocabulary || []}
             onSaveWord={(wordData) => handleSaveWord(wordData as VocabularyWord)}
             onSaveCollocation={(p, c) => console.log("Save col", p, c)}

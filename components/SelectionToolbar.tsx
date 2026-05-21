@@ -92,15 +92,19 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           e.stopPropagation();
-          if (!isSpeaking) {
-            onRead(selectionData.text);
-          }
+          onRead(selectionData.text);
         }}
-        className={`p-3 sm:p-3 rounded-xl hover:bg-slate-700 transition-all active:scale-90 group ${isSpeaking ? 'text-teal-400' : 'text-yellow-400 bg-yellow-400/10'}`}
-        title="Đọc văn bản"
-        disabled={isSpeaking}
+        className={`p-3 sm:p-3 rounded-xl hover:bg-slate-700 transition-all active:scale-90 group ${isSpeaking ? 'text-teal-400 bg-teal-400/10 border border-teal-500/20' : 'text-yellow-400 bg-yellow-400/10'}`}
+        title={isSpeaking ? "Dừng đọc văn bản" : "Đọc văn bản"}
       >
-        {isSpeaking ? <Loader2 size={iconSize} className="animate-spin" /> : <Volume2 size={iconSize} className="group-hover:scale-110 transition-transform" />}
+        {isSpeaking ? (
+          <span className="relative flex h-6 w-6 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+            <Loader2 size={iconSize} className="animate-spin text-teal-400 relative" />
+          </span>
+        ) : (
+          <Volume2 size={iconSize} className="group-hover:scale-110 transition-transform" />
+        )}
       </button>
 
       <div className="w-px h-8 bg-slate-700/50 mx-1"></div>
