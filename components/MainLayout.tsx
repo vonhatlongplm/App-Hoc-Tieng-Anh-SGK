@@ -11,6 +11,7 @@ import { SectionId, UserProgress, VocabularyWord, Message } from '../types';
 import { createInitialDetailedProgress } from '../constants';
 import Toast from './Toast';
 import { saveProgressToFirebase } from '../services/firebase';
+import LogoutConfirmationModal from './LogoutConfirmationModal';
 
 import { Menu, X, Loader2 } from 'lucide-react';
 
@@ -36,6 +37,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   }, [initialProgress.currentSection]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default false for mobile
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   // Auto-set sidebar open on desktop
   useEffect(() => {
@@ -207,7 +209,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
         toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         words={progress.vocabulary || []}
         isDiagnosed={progress.diagnosedLevel !== 'Undiagnosed'}
-        onLogout={() => window.location.reload()}
+        onLogout={() => setIsLogoutModalOpen(true)}
         isTeacher={progress.isAdmin}
         onBackToUpload={onBackToUpload}
         currentMaterial={progress.uploadedMaterials?.find(m => m.id === progress.currentMaterialId)}
@@ -227,6 +229,44 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
       <Toast 
         toast={toast} 
         onClose={() => setToast(null)} 
+      />
+
+      <LogoutConfirmationModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onLogout={async (clearLocalData) => {
+          if (clearLocalData) {
+            console.log("Clearing browser caches and local data...");
+            // Clear TTS browser CacheStorage
+            if (typeof window !== 'undefined' && 'caches' in window) {
+              try {
+                await window.caches.delete('tts-audio-cache');
+              } catch (e) {
+                console.error("Failed to delete tts cache:", e);
+              }
+            }
+            // Clear local storage items to avoid memory full or stale configurations
+            localStorage.removeItem('vocab_tts_mode');
+            localStorage.removeItem('aptis_translation_cache');
+            
+            // Remove any other cached words definitions
+            if (typeof window !== 'undefined' && window.localStorage) {
+              try {
+                const keysToRemove: string[] = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && (key.startsWith('vocab_cache_') || key.startsWith('aptis_'))) {
+                    keysToRemove.push(key);
+                  }
+                }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+              } catch (e) {
+                console.error("Failed to clean localStorage:", e);
+              }
+            }
+          }
+          window.location.reload();
+        }}
       />
     </div>
   );

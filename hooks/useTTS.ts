@@ -417,43 +417,85 @@ export const useTTS = () => {
         preloader.onerror = null;
         preloader.oncanplay = null;
 
-        // Set up preloading for the next chunk (index + 1)
+        // Setup Player Source
+        const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
+
+        // Set up preloading for the next chunk (index + 1) in browser CacheStorage
         if (index + 1 < chunks.length) {
           const nextChunk = chunks[index + 1];
           const nextLang = isVietnamese(nextChunk) ? 'vi' : 'en';
           const nextProxyUrl = `/api/tts?text=${encodeURIComponent(nextChunk)}&lang=${nextLang}`;
           
-          preloader.src = nextProxyUrl;
-          preloader.load(); // Fetch next chunk sound asynchronously in local cache
-        }
-
-        // Setup Player Source
-        const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
-        
-        // Verify if currentPlayer is already preloaded with this URL
-        let isPreloaded = false;
-        if (currentPlayer.src) {
-          try {
-            const urlObj = new URL(currentPlayer.src);
-            const relativeSrc = urlObj.pathname + urlObj.search;
-            if (relativeSrc === proxyUrl) {
-              isPreloaded = true;
-            }
-          } catch (e) {}
-        }
-        
-        if (!isPreloaded) {
-          currentPlayer.src = proxyUrl;
-          currentPlayer.load();
-        }
-
-        // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
-        loadingTimer = setTimeout(() => {
-          if (mySequenceId === currentSequenceId && !chunkCompleted) {
-            triggerFallback("Loading timeout (4s)");
+          if (typeof window !== 'undefined' && 'caches' in window) {
+            window.caches.open('tts-audio-cache').then(async (cache) => {
+              const matched = await cache.match(nextProxyUrl);
+              if (!matched) {
+                fetch(nextProxyUrl).then(response => {
+                  if (response.ok) cache.put(nextProxyUrl, response);
+                }).catch(() => {});
+              }
+            }).catch(() => {});
           }
-        }, 4000);
+        }
 
+        const loadAndPlay = async () => {
+          let audioBlob: Blob | null = null;
+          let isFromCache = false;
+
+          // Try checking the browser CacheStorage first
+          if (typeof window !== 'undefined' && 'caches' in window) {
+            try {
+              const cache = await window.caches.open('tts-audio-cache');
+              const cachedResponse = await cache.match(proxyUrl);
+              if (cachedResponse) {
+                audioBlob = await cachedResponse.blob();
+                isFromCache = true;
+              } else {
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                  await cache.put(proxyUrl, response.clone());
+                  audioBlob = await response.blob();
+                }
+              }
+            } catch (e) {
+              console.warn("[TTS-Cache] Error matching/saving to cache:", e);
+            }
+          }
+
+          if (mySequenceId !== currentSequenceId || chunkCompleted) return;
+
+          // If we successfully got a blob, load it as object URL
+          if (audioBlob) {
+            const blobUrl = URL.createObjectURL(audioBlob);
+            currentPlayer.src = blobUrl;
+            currentPlayer.load();
+          } else {
+            // Uncached fallback
+            currentPlayer.src = proxyUrl;
+            currentPlayer.load();
+          }
+
+          // Adjust rate first
+          try {
+            currentPlayer.playbackRate = 1.0;
+          } catch (e) {}
+
+          // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
+          if (!isFromCache) {
+            loadingTimer = setTimeout(() => {
+              if (mySequenceId === currentSequenceId && !chunkCompleted) {
+                triggerFallback("Loading timeout (4s)");
+              }
+            }, 4000);
+          }
+
+          currentPlayer.play().catch(playErr => {
+            if (chunkCompleted) return;
+            triggerFallback(`Autoplay blocked / playback error: ${playErr?.message || playErr}`);
+          });
+        };
+
+        // Reset handlers
         currentPlayer.onplay = () => {
           if (mySequenceId === currentSequenceId) {
             setIsLoading(false);
@@ -465,7 +507,6 @@ export const useTTS = () => {
             }
             
             // Set a generous fallback playback safety timer proportional to character length
-            // (140ms per character + generous 8s safety margin)
             const playDuration = Math.max(16000, currentChunk.length * 140 + 8000);
             if (playbackSafetyTimer) clearTimeout(playbackSafetyTimer);
             playbackSafetyTimer = setTimeout(() => {
@@ -483,16 +524,16 @@ export const useTTS = () => {
 
         currentPlayer.onerror = (err) => {
           if (chunkCompleted) return;
-          console.warn(`[TTS-Proxy-Error] Same-origin proxy failed or blocked. Trying direct cloud url.`, err);
+          console.warn(`[TTS-Proxy-Error] Cache/proxy load failed or blocked. Trying direct cloud url.`, err);
           
           if (loadingTimer) {
             clearTimeout(loadingTimer);
             loadingTimer = null;
           }
           
-          // Retry direct cloud provider URL as backup
+          // Retry direct cloud provider URL as backup (Use Google Translate for English to prevent audio repetition!)
           const directUrl = targetLang === 'en'
-            ? `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(currentChunk)}`
+            ? `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(currentChunk)}`
             : `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(currentChunk)}`;
 
           currentPlayer.onplay = null;
@@ -544,14 +585,7 @@ export const useTTS = () => {
           });
         };
 
-        try {
-          currentPlayer.playbackRate = 1.0;
-        } catch (e) {}
-
-        currentPlayer.play().catch(playErr => {
-          if (chunkCompleted) return;
-          triggerFallback(`Autoplay blocked / playback error: ${playErr?.message || playErr}`);
-        });
+        loadAndPlay();
       };
 
       playNextChunk();

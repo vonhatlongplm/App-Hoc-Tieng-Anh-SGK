@@ -9,8 +9,8 @@ export default async function handler(req: any, res: any) {
 
     let ttsUrl = "";
     if (lang === "en") {
-      // Youdao voice US accent (type=2) is excellent, stable, and naturally paced
-      ttsUrl = `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(text)}`;
+      // Use Google Translate TTS for English to play exactly once and avoid repeating syllables
+      ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(text)}`;
     } else {
       // Google Translate TTS is naturally fluent for Vietnamese and general translations
       ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
