@@ -438,44 +438,12 @@ export const useTTS = () => {
           }
         }
 
-        const loadAndPlay = async () => {
-          let audioBlob: Blob | null = null;
-          let isFromCache = false;
-
-          // Try checking the browser CacheStorage first (without blocking if not present)
-          if (typeof window !== 'undefined' && 'caches' in window) {
-            try {
-              const cache = await window.caches.open('tts-audio-cache');
-              const cachedResponse = await cache.match(proxyUrl);
-              if (cachedResponse) {
-                audioBlob = await cachedResponse.blob();
-                isFromCache = true;
-              } else {
-                // Do NOT block and await the fetch.
-                // Play proxy URL directly and cache asynchronously to preserve user gesture!
-                fetch(proxyUrl).then(response => {
-                  if (response.ok) {
-                    cache.put(proxyUrl, response).catch(() => {});
-                  }
-                }).catch(() => {});
-              }
-            } catch (e) {
-              console.warn("[TTS-Cache] Error matching/saving to cache:", e);
-            }
-          }
-
+        const loadAndPlay = () => {
           if (mySequenceId !== currentSequenceId || chunkCompleted || fallbackInProgress) return;
 
-          // If we successfully got a blob, load it as object URL
-          if (audioBlob) {
-            const blobUrl = URL.createObjectURL(audioBlob);
-            currentPlayer.src = blobUrl;
-            currentPlayer.load();
-          } else {
-            // Uncached fallback: load direct proxy URL instantly to keep user gesture
-            currentPlayer.src = proxyUrl;
-            currentPlayer.load();
-          }
+          // Uncached fallback: load direct proxy URL instantly to keep user gesture
+          currentPlayer.src = proxyUrl;
+          currentPlayer.load();
 
           // Adjust rate first
           try {
@@ -483,19 +451,32 @@ export const useTTS = () => {
           } catch (e) {}
 
           // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
-          if (!isFromCache) {
-            loadingTimer = setTimeout(() => {
-              if (mySequenceId === currentSequenceId && !chunkCompleted && !fallbackInProgress) {
-                triggerFallback("Loading timeout (4s)");
-              }
-            }, 4000);
-          }
+          loadingTimer = setTimeout(() => {
+            if (mySequenceId === currentSequenceId && !chunkCompleted && !fallbackInProgress) {
+              triggerFallback("Loading timeout (4s)");
+            }
+          }, 4000);
 
           currentPlayer.play().catch(playErr => {
             if (chunkCompleted || fallbackInProgress) return;
             console.warn("[TTS] play() failed, triggering fallback", playErr);
             triggerFallback(`Autoplay blocked / playback error: ${playErr?.message || playErr}`);
           });
+
+          // Background caching (offline resilience) without blocking play() execution stack
+          if (typeof window !== "undefined" && "caches" in window) {
+            window.caches.open("tts-audio-cache").then(cache => {
+              cache.match(proxyUrl).then(cachedResponse => {
+                if (!cachedResponse) {
+                  fetch(proxyUrl).then(response => {
+                    if (response.ok) {
+                      cache.put(proxyUrl, response).catch(() => {});
+                    }
+                  }).catch(() => {});
+                }
+              }).catch(() => {});
+            }).catch(() => {});
+          }
         };
 
         // Reset handlers
