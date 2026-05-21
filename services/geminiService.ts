@@ -153,7 +153,24 @@ export const translateToVietnamese = async (text: string) => {
     const res = await generateContent([{ role: 'user', parts: [{ text: `Translate to Vietnamese: ${text}` }] }], "You are a translator.");
     return res.text;
   } catch (error: any) {
-    console.warn("[translateToVietnamese] Gemini failed, attempting free translation fallback...", error);
+    console.warn("[translateToVietnamese] Gemini failed, attempting Google Translate / MyMemory fallbacks...", error);
+    
+    // Fallback 1: Google Translate API (gtx client - free, high-limit, fast)
+    try {
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
+      const gtxRes = await fetch(gtxUrl);
+      if (gtxRes.ok) {
+        const data = await gtxRes.json();
+        if (data && data[0]) {
+          const translatedText = data[0].map((segment: any) => segment[0]).join('');
+          if (translatedText) return translatedText;
+        }
+      }
+    } catch (gtxError) {
+      console.warn("[translateToVietnamese] Google Translate fallback failed:", gtxError);
+    }
+
+    // Fallback 2: MyMemory Translated translation api
     try {
       const fallbackRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|vi`);
       if (fallbackRes.ok) {
@@ -163,9 +180,11 @@ export const translateToVietnamese = async (text: string) => {
         }
       }
     } catch (fallbackError) {
-      console.error("[translateToVietnamese] Fallback translation failed too:", fallbackError);
+      console.error("[translateToVietnamese] Fallback MyMemory translation failed too:", fallbackError);
     }
-    throw error;
+    
+    // Fallback 3: Return a safe human-friendly translation error string rather than crashing with Toast
+    return `[Dịch máy] ${text} (Không thể tải bản dịch của Gemini do giới hạn số lượt truy cập. Hãy thử lại sau vài giây!)`;
   }
 };
 
@@ -188,33 +207,45 @@ export const lookupWord = async (word: string) => {
     const jsonStr = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(jsonStr);
   } catch (e: any) {
-    console.warn("[lookupWord] Gemini failed, attempting free translation fallback...", e);
+    console.warn("[lookupWord] Gemini failed, attempting Google Translate / MyMemory fallbacks...", e);
+    let meaningText = "Không thể tra cứu chi tiết bằng Từ điển AI do giới hạn API.";
+    
+    // Try Google Translate for meaning
     try {
-      const fallbackRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|vi`);
-      if (fallbackRes.ok) {
-        const data = await fallbackRes.json();
-        if (data?.responseData?.translatedText) {
-          return {
-            word,
-            ipa: '/.../',
-            partOfSpeech: 'word',
-            meaning: data.responseData.translatedText,
-            definition: "Dictionary query limit reached, showing translation result.",
-            example: "",
-            collocations: []
-          };
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(word)}`;
+      const gtxRes = await fetch(gtxUrl);
+      if (gtxRes.ok) {
+        const data = await gtxRes.json();
+        if (data && data[0]) {
+          const translatedText = data[0].map((segment: any) => segment[0]).join('');
+          if (translatedText) {
+            meaningText = translatedText;
+          }
         }
       }
-    } catch (fallbackError) {
-      console.error("[lookupWord] Fallback lookup failed:", fallbackError);
+    } catch (gtxError) {
+      console.warn("[lookupWord] Google Translate fallback failed:", gtxError);
+      
+      // Try MyMemory Translated
+      try {
+        const fallbackRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|vi`);
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          if (data?.responseData?.translatedText) {
+            meaningText = data.responseData.translatedText;
+          }
+        }
+      } catch (fallbackError) {
+        console.error("[lookupWord] Fallback lookup failed:", fallbackError);
+      }
     }
     
     return { 
       word, 
-      ipa: '...', 
+      ipa: '/.../', 
       partOfSpeech: 'word', 
-      meaning: 'Tra cứu thất bại do đang hết lượt dùng API (RESOURCE_EXHAUSTED). Hãy thử lại sau ít giây.', 
-      definition: "Translation failed",
+      meaning: meaningText, 
+      definition: "Từ điển tạm thời chuyển sang chế độ dịch ngoại tuyến / Google Translate do tài khoản AI quá tải.",
       example: "",
       collocations: []
     };
