@@ -3,7 +3,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 export type TTSMode = 'ai' | 'browser';
 
 // Reusable global HTMLAudioElement to prevent multiple overlap, GC issues, and memory leaks
-let globalAudio: HTMLAudioElement | null = null;
+let globalAudio1: HTMLAudioElement | null = null;
+let globalAudio2: HTMLAudioElement | null = null;
 let currentSequenceId: number = 0;
 let localGlobalVoices: SpeechSynthesisVoice[] = [];
 
@@ -16,12 +17,19 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
   }
 }
 
-const getGlobalAudio = () => {
-  if (typeof window === 'undefined') return null;
-  if (!globalAudio) {
-    globalAudio = new Audio();
+const getAudioPool = () => {
+  if (typeof window === 'undefined') return { audio1: null, audio2: null };
+  if (!globalAudio1) {
+    globalAudio1 = new Audio();
   }
-  return globalAudio;
+  if (!globalAudio2) {
+    globalAudio2 = new Audio();
+  }
+  return { audio1: globalAudio1, audio2: globalAudio2 };
+};
+
+const getGlobalAudio = () => {
+  return getAudioPool().audio1;
 };
 
 export const useTTS = () => {
@@ -84,47 +92,55 @@ export const useTTS = () => {
     }
   };
 
-  const splitIntoChunks = (text: string, maxLen = 160): string[] => {
-    const cleanText = text.replace(/[\r\n]+/g, ' ').trim();
-    if (!cleanText) return [];
+  const splitIntoChunks = (cleanedText: string, maxLen = 160): string[] => {
+    if (!cleanedText) return [];
     
-    // Split by punctuation first to preserve natural speaking pauses
-    const sentences = cleanText.split(/([.!?。、,，;；])\s*/);
+    // Split into paragraphs/lines first to preserve structural pauses
+    const lines = cleanedText.split('\n');
     const chunks: string[] = [];
-    let currentChunk = '';
 
-    for (const part of sentences) {
-      if (!part) continue;
-      // If it's single punctuation, bundle it to previous chunk
-      if (/^[.!?。、,，;；]$/.test(part)) {
-        currentChunk += part;
-        continue;
-      }
+    for (const line of lines) {
+      const cleanLine = line.trim();
+      if (!cleanLine) continue;
 
-      if ((currentChunk + ' ' + part).length <= maxLen) {
-        currentChunk = currentChunk ? currentChunk + ' ' + part : part;
-      } else {
-        if (currentChunk.trim()) {
-          chunks.push(currentChunk.trim());
+      // Split the line by punctuation to preserve natural speaking pauses
+      const sentences = cleanLine.split(/([.!?。、,，;；:])\s*/);
+      let currentChunk = '';
+
+      for (const part of sentences) {
+        if (!part) continue;
+        
+        // If it's single punctuation, bundle it to previous chunk
+        if (/^[.!?。、,，;；:]$/.test(part)) {
+          currentChunk += part;
+          continue;
         }
-        if (part.length > maxLen) {
-          const words = part.split(/\s+/);
-          currentChunk = '';
-          for (const word of words) {
-            if ((currentChunk + ' ' + word).trim().length <= maxLen) {
-              currentChunk = (currentChunk + ' ' + word).trim();
-            } else {
-              if (currentChunk.trim()) chunks.push(currentChunk.trim());
-              currentChunk = word;
-            }
-          }
+
+        if ((currentChunk + ' ' + part).length <= maxLen) {
+          currentChunk = currentChunk ? currentChunk + ' ' + part : part;
         } else {
-          currentChunk = part;
+          if (currentChunk.trim()) {
+            chunks.push(currentChunk.trim());
+          }
+          if (part.length > maxLen) {
+            const words = part.split(/\s+/);
+            currentChunk = '';
+            for (const word of words) {
+              if ((currentChunk + ' ' + word).trim().length <= maxLen) {
+                currentChunk = (currentChunk + ' ' + word).trim();
+              } else {
+                if (currentChunk.trim()) chunks.push(currentChunk.trim());
+                currentChunk = word;
+              }
+            }
+          } else {
+            currentChunk = part;
+          }
         }
       }
-    }
-    if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
     }
     return chunks;
   };
@@ -211,14 +227,20 @@ export const useTTS = () => {
     setIsLoading(false);
     currentSequenceId++; 
     
-    // Stop global audio
-    const audio = getGlobalAudio();
-    if (audio) {
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-      } catch (e) {}
-    }
+    // Stop pool audio elements
+    const { audio1, audio2 } = getAudioPool();
+    [audio1, audio2].forEach((audio) => {
+      if (audio) {
+        try {
+          audio.pause();
+          audio.src = ''; // Clear source to stop net requests immediately
+          audio.onplay = null;
+          audio.onended = null;
+          audio.onerror = null;
+          audio.oncanplay = null;
+        } catch (e) {}
+      }
+    });
     
     // Stop SpeechSynthesis
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -245,7 +267,9 @@ export const useTTS = () => {
       
       const cleanTextForSpeech = (rawText: string) => {
         if (!rawText) return '';
-        return rawText
+        
+        // Strip markdown metadata & symbols, keeping newlines
+        const stripped = rawText
           // Strip image tags first ![alt](url) -> alt
           .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
           // Strip link tags [text](url) -> text
@@ -267,10 +291,15 @@ export const useTTS = () => {
           // Remove list bullets / list indicators
           .replace(/^\s*[\*\-+]\s+/gm, '')
           // Remove line separators like ____________
-          .replace(/[\\_L]{3,}/g, '')
-          // Normalize and compress repeated whitespace down to a single space
-          .replace(/\s+/g, ' ')
-          .trim();
+          .replace(/[\\_L]{3,}/g, '');
+
+        // Split by line, trim, collapse repeated spaces per line, filter empty lines
+        const lines = stripped.split(/\r?\n/);
+        const cleanedLines = lines
+          .map(line => line.replace(/[ \t]+/g, ' ').trim())
+          .filter(Boolean);
+
+        return cleanedLines.join('\n');
       };
 
       const cleanedText = cleanTextForSpeech(text);
@@ -295,6 +324,7 @@ export const useTTS = () => {
         }
 
         const currentChunk = chunks[index];
+        const targetLang = isVietnamese(currentChunk) ? 'vi' : 'en';
 
         // Track chunk completion status to avoid duplicate progression
         let chunkCompleted = false;
@@ -321,20 +351,58 @@ export const useTTS = () => {
           return;
         }
 
-        // AI Mode Setup: Same-Origin API Proxy URL
-        const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
-        const audio = getGlobalAudio();
-
-        if (!audio) {
+        // AI Mode Setup using Audio Pool
+        const { audio1, audio2 } = getAudioPool();
+        if (!audio1 || !audio2) {
           fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           return;
         }
 
-        // Reset any prior handler setups to avoid overlapping hooks
-        audio.onplay = null;
-        audio.onended = null;
-        audio.onerror = null;
-        audio.oncanplay = null;
+        // Alternately use audio1 and audio2 for double preloading cache
+        const currentPlayer = index % 2 === 0 ? audio1 : audio2;
+        const preloader = index % 2 === 0 ? audio2 : audio1;
+
+        // Reset any prior handler setups on current player to avoid overlapping hooks
+        currentPlayer.onplay = null;
+        currentPlayer.onended = null;
+        currentPlayer.onerror = null;
+        currentPlayer.oncanplay = null;
+
+        // Clean up preloader's handlers to stop it from invoking callbacks when it preloads in back
+        preloader.onplay = null;
+        preloader.onended = null;
+        preloader.onerror = null;
+        preloader.oncanplay = null;
+
+        // Set up preloading for the next chunk (index + 1)
+        if (index + 1 < chunks.length) {
+          const nextChunk = chunks[index + 1];
+          const nextLang = isVietnamese(nextChunk) ? 'vi' : 'en';
+          const nextProxyUrl = `/api/tts?text=${encodeURIComponent(nextChunk)}&lang=${nextLang}`;
+          
+          preloader.src = nextProxyUrl;
+          preloader.load(); // Fetch next chunk sound asynchronously in local cache
+        }
+
+        // Setup Player Source
+        const proxyUrl = `/api/tts?text=${encodeURIComponent(currentChunk)}&lang=${targetLang}`;
+        
+        // Verify if currentPlayer is already preloaded with this URL
+        let isPreloaded = false;
+        if (currentPlayer.src) {
+          try {
+            const urlObj = new URL(currentPlayer.src);
+            const relativeSrc = urlObj.pathname + urlObj.search;
+            if (relativeSrc === proxyUrl) {
+              isPreloaded = true;
+            }
+          } catch (e) {}
+        }
+        
+        if (!isPreloaded) {
+          currentPlayer.src = proxyUrl;
+          currentPlayer.load();
+        }
 
         // 1. Loading Timeout: If it has not started playing in 4 seconds, fallback to SpeechSynthesis
         loadingTimer = setTimeout(() => {
@@ -342,16 +410,16 @@ export const useTTS = () => {
             console.warn(`[TTS-Loading-Timeout] Slow network/error loading chunk ${index}. Switching to SpeechSynthesis fallback.`);
             
             // Clean/Pause the audio tag before fallback so it doesn't cross-speak later
-            audio.onplay = null;
-            audio.onended = null;
-            audio.onerror = null;
-            try { audio.pause(); } catch(e){}
+            currentPlayer.onplay = null;
+            currentPlayer.onended = null;
+            currentPlayer.onerror = null;
+            try { currentPlayer.pause(); } catch(e){}
             
             fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           }
         }, 4000);
 
-        audio.onplay = () => {
+        currentPlayer.onplay = () => {
           if (mySequenceId === currentSequenceId) {
             setIsLoading(false);
             
@@ -374,11 +442,11 @@ export const useTTS = () => {
           }
         };
 
-        audio.onended = () => {
+        currentPlayer.onended = () => {
           onChunkCompleted();
         };
 
-        audio.onerror = (err) => {
+        currentPlayer.onerror = (err) => {
           if (chunkCompleted) return;
           console.warn(`[TTS-Proxy-Error] Same-origin proxy failed or blocked. Trying direct cloud url.`, err);
           
@@ -392,19 +460,19 @@ export const useTTS = () => {
             ? `https://dict.youdao.com/dictvoice?type=2&audio=${encodeURIComponent(currentChunk)}`
             : `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(currentChunk)}`;
 
-          audio.onplay = null;
-          audio.onended = null;
-          audio.onerror = null;
+          currentPlayer.onplay = null;
+          currentPlayer.onended = null;
+          currentPlayer.onerror = null;
 
           let retryLoadingTimer = setTimeout(() => {
             if (mySequenceId === currentSequenceId && !chunkCompleted) {
               console.warn(`[TTS-Retry-Loading-Timeout] Direct URL load stalled. Defaulting to voice synthesis.`);
-              try { audio.pause(); } catch(e){}
+              try { currentPlayer.pause(); } catch(e){}
               fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
             }
           }, 3500);
 
-          audio.onplay = () => {
+          currentPlayer.onplay = () => {
             if (mySequenceId === currentSequenceId) {
               setIsLoading(false);
               clearTimeout(retryLoadingTimer);
@@ -419,36 +487,32 @@ export const useTTS = () => {
             }
           };
 
-          audio.onended = () => {
+          currentPlayer.onended = () => {
             clearTimeout(retryLoadingTimer);
             onChunkCompleted();
           };
 
-          audio.onerror = () => {
+          currentPlayer.onerror = () => {
             if (chunkCompleted) return;
             clearTimeout(retryLoadingTimer);
             console.warn(`[TTS-Fallback] Direct URL also failed. Launching browser SpeechSynthesis...`);
             fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           };
 
-          audio.src = directUrl;
-          audio.load();
-          audio.play().catch(() => {
+          currentPlayer.src = directUrl;
+          currentPlayer.load();
+          currentPlayer.play().catch(() => {
             if (chunkCompleted) return;
             clearTimeout(retryLoadingTimer);
             fallbackSpeechSynthesisForChunk(currentChunk, targetLang, mySequenceId, onChunkCompleted);
           });
         };
 
-        // Kick off original audio proxy request
-        audio.src = proxyUrl;
-        audio.load();
-        
         try {
-          audio.playbackRate = 1.0;
+          currentPlayer.playbackRate = 1.0;
         } catch (e) {}
 
-        audio.play().catch(playErr => {
+        currentPlayer.play().catch(playErr => {
           if (chunkCompleted) return;
           if (loadingTimer) {
             clearTimeout(loadingTimer);
