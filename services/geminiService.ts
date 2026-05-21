@@ -149,8 +149,24 @@ export const analyzePronunciation = async (audioBase64: string, targetText: stri
 };
 
 export const translateToVietnamese = async (text: string) => {
-  const res = await generateContent([{ role: 'user', parts: [{ text: `Translate to Vietnamese: ${text}` }] }], "You are a translator.");
-  return res.text;
+  try {
+    const res = await generateContent([{ role: 'user', parts: [{ text: `Translate to Vietnamese: ${text}` }] }], "You are a translator.");
+    return res.text;
+  } catch (error: any) {
+    console.warn("[translateToVietnamese] Gemini failed, attempting free translation fallback...", error);
+    try {
+      const fallbackRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|vi`);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        if (data?.responseData?.translatedText) {
+          return data.responseData.translatedText;
+        }
+      }
+    } catch (fallbackError) {
+      console.error("[translateToVietnamese] Fallback translation failed too:", fallbackError);
+    }
+    throw error;
+  }
 };
 
 export const lookupWord = async (word: string) => {
@@ -166,18 +182,38 @@ export const lookupWord = async (word: string) => {
     "collocations": [{"phrase": "common phrase", "meaning": "Vietnamese meaning"}]
   }`;
   
-  const res = await generateContent([{ role: 'user', parts: [{ text: prompt }] }], "You are a dictionary.");
   try {
+    const res = await generateContent([{ role: 'user', parts: [{ text: prompt }] }], "You are a dictionary.");
     // Extract JSON from response text (Gemini might wrap it in markdown block)
     const jsonStr = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(jsonStr);
-  } catch (e) {
-    // Fallback if AI fails to return valid JSON
+  } catch (e: any) {
+    console.warn("[lookupWord] Gemini failed, attempting free translation fallback...", e);
+    try {
+      const fallbackRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|vi`);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        if (data?.responseData?.translatedText) {
+          return {
+            word,
+            ipa: '/.../',
+            partOfSpeech: 'word',
+            meaning: data.responseData.translatedText,
+            definition: "Dictionary query limit reached, showing translation result.",
+            example: "",
+            collocations: []
+          };
+        }
+      }
+    } catch (fallbackError) {
+      console.error("[lookupWord] Fallback lookup failed:", fallbackError);
+    }
+    
     return { 
       word, 
       ipa: '...', 
       partOfSpeech: 'word', 
-      meaning: 'Tra cứu thất bại. Hãy thử lại.', 
+      meaning: 'Tra cứu thất bại do đang hết lượt dùng API (RESOURCE_EXHAUSTED). Hãy thử lại sau ít giây.', 
       definition: "Translation failed",
       example: "",
       collocations: []
