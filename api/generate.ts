@@ -179,8 +179,8 @@ export default async function handler(req: any, res: any) {
         console.warn(`[Omni-SDK-v3] Attempt ${i + 1} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
         
         if (isRateLimit && i < fallbackModels.length - 1) {
-          console.log("[Omni-SDK-v3] Quota limit hit. Sleeping 600ms before falling back to next prioritized model...");
-          await new Promise(resolve => setTimeout(resolve, 600));
+          console.log("[Omni-SDK-v3] Quota limit hit. Sleeping 1500ms before falling back to next prioritized model...");
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
     }

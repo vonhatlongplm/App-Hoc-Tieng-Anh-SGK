@@ -1,27 +1,66 @@
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const generateContent = async (contents: any, systemInstruction: string) => {
-  const res = await fetch('/api/generate', {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({ contents, systemInstruction })
-  });
-  
-  if (!res.ok) {
-    let errorDetail = `Lỗi kết nối AI (HTTP ${res.status})`;
+  let attempt = 0;
+  const maxAttempts = 3;
+  const backoffDelays = [2000, 4500, 7000]; // Retries will pause to let the quota refresh
+
+  while (true) {
     try {
-      const text = await res.text();
-      try {
-        const errorJson = JSON.parse(text);
-        errorDetail = errorJson.error || errorJson.details || errorDetail;
-      } catch {
-        // Not JSON
-        errorDetail = text.slice(0, 200) || errorDetail;
+      const res = await fetch('/api/generate', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ contents, systemInstruction })
+      });
+      
+      if (!res.ok) {
+        let errorDetail = `Lỗi kết nối AI (HTTP ${res.status})`;
+        try {
+          const text = await res.text();
+          try {
+            const errorJson = JSON.parse(text);
+            errorDetail = errorJson.error || errorJson.details || errorDetail;
+          } catch {
+            // Not JSON
+            errorDetail = text.slice(0, 200) || errorDetail;
+          }
+        } catch (e) {}
+        
+        const isRateLimit = errorDetail.toLowerCase().includes("exhausted") || 
+                            errorDetail.toLowerCase().includes("quota") || 
+                            errorDetail.toLowerCase().includes("429") ||
+                            res.status === 429;
+                            
+        if (isRateLimit && attempt < maxAttempts - 1) {
+          const waitTime = backoffDelays[attempt];
+          console.warn(`[generateContent] Rate limit hit. Retrying in ${waitTime}ms... (Attempt ${attempt + 1}/${maxAttempts})`);
+          await delay(waitTime);
+          attempt++;
+          continue;
+        }
+        
+        throw new Error(errorDetail);
       }
-    } catch (e) {}
-    throw new Error(errorDetail);
+      
+      return await res.json();
+    } catch (error: any) {
+      const errStr = String(error.message || error).toLowerCase();
+      const isRateLimit = errStr.includes("exhausted") || 
+                          errStr.includes("quota") || 
+                          errStr.includes("429");
+                          
+      if (isRateLimit && attempt < maxAttempts - 1) {
+        const waitTime = backoffDelays[attempt];
+        console.warn(`[generateContent] Catch Rate limit hit. Retrying in ${waitTime}ms... (Attempt ${attempt + 1}/${maxAttempts})`);
+        await delay(waitTime);
+        attempt++;
+        continue;
+      }
+      
+      throw error;
+    }
   }
-  
-  return await res.json();
 };
 
 export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string) => {
