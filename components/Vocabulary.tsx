@@ -4,8 +4,6 @@ import { VocabularyWord, VocabularyCollocation } from '../types';
 import { getDistractors, analyzePronunciation, getReviewHint, getCollocationQuiz, lookupWord, selectStudySessionWords } from '../services/geminiService';
 import { useTTS, TTSMode } from '../hooks/useTTS';
 import { Trash2, Volume2, Lightbulb, Zap, CheckCircle2, XCircle, Ear, Mic, Loader2, CornerDownLeft, Archive, SkipForward, Sparkles, Image as ImageIcon, ChevronDown, Play, Keyboard, Library, Plus, ArrowRight } from 'lucide-react';
-import { B2_VOCAB_DECKS } from '../constants';
-
 // --- Helper Components ---
 
 const AudioWaveform: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
@@ -182,8 +180,8 @@ const StudySession: React.FC<{ items: PracticeItem[]; words: VocabularyWord[]; o
 
 const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }) => {
   const [studySessionItems, setStudySessionItems] = useState<PracticeItem[] | null>(null);
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [addingDeckId, setAddingDeckId] = useState<string | null>(null);
+  const [quickAddWord, setQuickAddWord] = useState('');
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
   const [ttsMode, setTtsMode] = useState<'ai' | 'browser'>(() => {
       return (localStorage.getItem('vocab_tts_mode') as 'ai' | 'browser') || 'ai';
   });
@@ -214,7 +212,6 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
             }
         } else {
             // Allow review of mastered words (especially from backlog)
-            // Start from level 0 to 3
             for (let i = 0; i < 4; i++) {
                 items.push({ type: 'word', data: word, targetMastery: i });
             }
@@ -263,7 +260,7 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
       
       if (candidates.length === 0) {
           setIsSessionLoading(false);
-          alert("Bạn đã chinh phục hết từ vựng hiện tại! Hãy thêm từ mới nhé.");
+          alert("Bạn đã chinh phục hết từ vựng hiện tại! Hãy thêm từ mới từ tài liệu nhé.");
           return;
       }
 
@@ -275,7 +272,6 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
       } else {
           // Use AI to select the best 10 words
           const candidateStrings = candidates.map(w => w.word);
-          // Limit candidate pool sent to AI to avoid token limits if list is huge (e.g. top 50)
           const pool = candidateStrings.slice(0, 50); 
           
           try {
@@ -321,179 +317,80 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
     setStudySessionItems(null);
   }
 
-  const handleAddDeck = async (deckId: string, deckWords: string[]) => {
-      setAddingDeckId(deckId);
+  const handleQuickAdd = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const trimmed = quickAddWord.trim();
+      if (!trimmed) return;
       
+      setIsQuickAdding(true);
       const existingWords = new Set(words.map(w => w.word.toLowerCase()));
-      
-      // Calculate how many words from this deck are already learned (case-insensitive)
-      const currentDeckLearnedCount = deckWords.filter(w => existingWords.has(w.toLowerCase())).length;
-      
-      // Calculate target to reach next multiple of 10
-      // If current is 0 -> target 10. If 1 -> target 10. If 10 -> target 20. If 11 -> target 20.
-      const targetTotal = Math.ceil((currentDeckLearnedCount + 1) / 10) * 10;
-      
-      // Determine how many new words to add to reach the target
-      let limit = targetTotal - currentDeckLearnedCount;
-      
-      // Safety check: if limit is 0 (shouldn't happen with the math above unless maxed out), default to 10
-      if (limit <= 0) limit = 10;
-
-      let addedCount = 0;
-      
-      for (const wordStr of deckWords) {
-          if (addedCount >= limit) break; 
-
-          if (!existingWords.has(wordStr.toLowerCase())) {
-              addedCount++;
-              
-              // Let's implement a simple local cache for looked up words to avoid re-fetching
-              const cachedData = localStorage.getItem(`vocab_cache_${wordStr.toLowerCase()}`);
-              
-              if (cachedData) {
-                  try {
-                      const parsedData = JSON.parse(cachedData);
-                      onUpdateWord({
-                          ...parsedData,
-                          savedAt: Date.now(),
-                          isBacklogged: false,
-                          masteryLevel: 0 // Reset mastery on re-add
-                      });
-                      continue;
-                  } catch (e) {
-                      console.error("Error parsing cached vocab data", e);
-                  }
-              }
-
-              // Add a placeholder first so the user sees it immediately
-              const placeholderWord: VocabularyWord = {
-                  word: wordStr,
-                  meaning: 'Đang tải nghĩa...',
-                  definition: '...',
-                  example: '...',
-                  ipa: '',
-                  partOfSpeech: '',
-                  masteryLevel: 0,
-                  pronunciationAttempts: [],
-                  savedAt: Date.now(),
-                  isBacklogged: false
-              };
-              onUpdateWord(placeholderWord);
-              
-              // Fetch the actual definition in the background
-              lookupWord(wordStr).then(result => {
-                  const fullWordData: VocabularyWord = {
-                      ...placeholderWord,
-                      meaning: result.meaning || result.definition,
-                      definition: result.definition,
-                      example: result.example,
-                      ipa: result.ipa,
-                      partOfSpeech: result.partOfSpeech,
-                      irregularForms: result.irregularForms,
-                      collocations: result.collocations?.map((c: any) => ({
-                          phrase: c.phrase,
-                          meaning: c.meaning,
-                          masteryLevel: 0,
-                          pronunciationAttempts: []
-                      }))
-                  };
-                  
-                  // Cache the result
-                  localStorage.setItem(`vocab_cache_${wordStr.toLowerCase()}`, JSON.stringify(fullWordData));
-                  
-                  onUpdateWord(fullWordData);
-              }).catch(err => {
-                  console.error("Failed to lookup word:", wordStr, err);
-                  onUpdateWord({
-                      ...placeholderWord,
-                      meaning: 'Không thể tải nghĩa. Vui lòng thử lại sau.'
-                  });
-              });
-          }
+      if (existingWords.has(trimmed.toLowerCase())) {
+          alert(`Từ "${trimmed}" đã có sẵn trong danh mục từ vựng học tập của bạn rồi!`);
+          setIsQuickAdding(false);
+          setQuickAddWord('');
+          return;
       }
+
+      // Add a placeholder first so the user sees it immediately
+      const placeholderWord: VocabularyWord = {
+          word: trimmed,
+          meaning: 'Đang tra nghĩa & phân tích...',
+          definition: '...',
+          example: '...',
+          ipa: '',
+          partOfSpeech: '',
+          masteryLevel: 0,
+          pronunciationAttempts: [],
+          savedAt: Date.now(),
+          isBacklogged: false
+      };
+      onUpdateWord(placeholderWord);
       
-      setTimeout(() => {
-          setAddingDeckId(null);
-          setShowLibrary(false);
-      }, 500);
+      try {
+          const result = await lookupWord(trimmed);
+          const fullWordData: VocabularyWord = {
+              ...placeholderWord,
+              meaning: result.meaning || result.definition,
+              definition: result.definition,
+              example: result.example,
+              ipa: result.ipa,
+              partOfSpeech: result.partOfSpeech,
+              irregularForms: result.irregularForms,
+              collocations: result.collocations?.map((c: any) => ({
+                  phrase: c.phrase,
+                  meaning: c.meaning,
+                  masteryLevel: 0,
+                  pronunciationAttempts: []
+              }))
+          };
+          onUpdateWord(fullWordData);
+          setQuickAddWord('');
+      } catch (err) {
+          console.error("Failed to lookup word:", trimmed, err);
+          onUpdateWord({
+              ...placeholderWord,
+              meaning: 'Gặp lỗi khi tra cứu tự động. Bạn vẫn có thể luyện viết hoặc phát âm từ này.'
+          });
+      } finally {
+          setIsQuickAdding(false);
+      }
   };
 
-  if (showLibrary) {
-      return (
-          <div className="p-4 md:p-6 space-y-6 animate-in fade-in duration-500 h-full overflow-y-auto bg-slate-50">
-              <div className="max-w-4xl mx-auto space-y-8">
-                  <header className="mb-8 flex items-center justify-between">
-                      <div>
-                          <h2 className="text-3xl font-bold text-slate-800 serif">Thư viện Từ vựng B2</h2>
-                          <p className="text-slate-500 mt-2">Chọn các chủ đề thường gặp trong bài thi Aptis B2 để thêm vào lộ trình học.</p>
-                      </div>
-                      <button onClick={() => setShowLibrary(false)} className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors flex items-center gap-2">
-                          <CornerDownLeft size={16} /> Quay lại
-                      </button>
-                  </header>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {B2_VOCAB_DECKS.map(deck => {
-                          const totalWords = deck.words.length;
-                          // Fix: Case-insensitive check for learned words to match handleAddDeck logic
-                          const learnedWordsCount = deck.words.filter(w => words.some(saved => saved.word.toLowerCase() === w.toLowerCase())).length;
-                          const remainingWords = totalWords - learnedWordsCount;
-
-                          return (
-                          <div key={deck.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                              <div className="flex-1">
-                                  <h3 className="text-xl font-bold text-slate-800 mb-2">{deck.title}</h3>
-                                  <p className="text-slate-500 text-sm mb-4">{deck.description}</p>
-                                  
-                                  <div className="grid grid-cols-3 gap-3 mb-5">
-                                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
-                                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Tổng số</div>
-                                          <div className="text-lg font-bold text-slate-700">{totalWords}</div>
-                                      </div>
-                                      <div className="bg-teal-50 p-2.5 rounded-xl border border-teal-100 text-center">
-                                          <div className="text-[10px] text-teal-600 font-bold uppercase tracking-wider mb-1">Đã lấy</div>
-                                          <div className="text-lg font-bold text-teal-700">{learnedWordsCount}</div>
-                                      </div>
-                                      <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100 text-center">
-                                          <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mb-1">Còn lại</div>
-                                          <div className="text-lg font-bold text-amber-700">{remainingWords}</div>
-                                      </div>
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-2 mb-6">
-                                      {deck.words.slice(0, 5).map(w => (
-                                          <span key={w} className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md font-medium">{w}</span>
-                                      ))}
-                                      <span className="px-2 py-1 bg-slate-50 text-slate-400 text-xs rounded-md font-medium">+{Math.max(0, deck.words.length - 5)} từ nữa</span>
-                                  </div>
-                              </div>
-                              <button 
-                                  onClick={() => handleAddDeck(deck.id, deck.words)}
-                                  disabled={addingDeckId === deck.id || remainingWords === 0}
-                                  className="w-full py-3 rounded-xl bg-teal-50 text-teal-700 font-bold hover:bg-teal-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                  {addingDeckId === deck.id ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                                  {addingDeckId === deck.id ? 'Đang thêm...' : (remainingWords === 0 ? 'Đã hoàn thành' : 'Thêm vào lộ trình học')}
-                              </button>
-                          </div>
-                          );
-                      })}
-                  </div>
-              </div>
-          </div>
-      );
-  }
-
-  // Helper to categorize words by topic
-  const getWordTopic = (word: string) => {
-      const deck = B2_VOCAB_DECKS.find(d => d.words.includes(word));
-      return deck ? deck.title : 'Từ vựng khác';
+  // Helper to categorize words by Part of Speech
+  const getWordTopic = (wordObj: VocabularyWord) => {
+      if (!wordObj.partOfSpeech) return 'Danh mục khác';
+      const pos = wordObj.partOfSpeech.toLowerCase();
+      if (pos.includes('noun') || pos.includes('danh')) return 'Danh từ (Nouns)';
+      if (pos.includes('verb') || pos.includes('động')) return 'Động từ (Verbs)';
+      if (pos.includes('adj') || pos.includes('tính')) return 'Tính từ (Adjectives)';
+      if (pos.includes('adv') || pos.includes('trạng')) return 'Trạng từ (Adverbs)';
+      return 'Cấu trúc & Cụm từ';
   };
 
   const groupWordsByTopic = (wordList: VocabularyWord[]) => {
       const groups: Record<string, VocabularyWord[]> = {};
       wordList.forEach(w => {
-          const topic = getWordTopic(w.word);
+          const topic = getWordTopic(w);
           if (!groups[topic]) groups[topic] = [];
           groups[topic].push(w);
       });
@@ -509,10 +406,10 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
             <div className="max-w-4xl mx-auto space-y-8">
                 <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-3xl font-bold text-slate-800 serif">Tháp Từ vựng</h2>
-                        <p className="text-slate-500 mt-2">Chinh phục hệ thống từ vựng qua 4 cấp độ: Hiểu nghĩa, Nhận diện âm thanh, Luyện viết và Phát âm chuẩn.</p>
+                        <h2 className="text-3xl font-bold text-slate-800 serif">Tháp Từ vựng Nghiên cứu</h2>
+                        <p className="text-slate-500 mt-2">Chinh phục từ vựng từ sách & tài liệu học tập qua 4 cấp độ: Nhận diện, Nghe hiểu, Luyện viết & Phát âm chuẩn.</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <button 
                             onClick={toggleTtsMode}
                             className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
@@ -525,9 +422,25 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
                             {ttsMode === 'ai' ? <Sparkles size={16} /> : <Keyboard size={16} />}
                             {ttsMode === 'ai' ? 'Giọng AI (Hay)' : 'Giọng Máy (Nhanh)'}
                         </button>
-                        <button onClick={() => setShowLibrary(true)} className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm">
-                            <Library size={18} /> Thư viện B2
-                        </button>
+                        
+                        <form onSubmit={handleQuickAdd} className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                            <input 
+                                type="text" 
+                                value={quickAddWord}
+                                onChange={(e) => setQuickAddWord(e.target.value)}
+                                disabled={isQuickAdding}
+                                placeholder="Thêm & tra nhanh..."
+                                className="px-3 py-1.5 text-xs rounded-lg border border-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50 font-medium w-36 sm:w-44"
+                            />
+                            <button 
+                                type="submit"
+                                disabled={isQuickAdding || !quickAddWord.trim()}
+                                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                                {isQuickAdding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                                <span>{isQuickAdding ? 'Đang tra...' : 'Thêm từ'}</span>
+                            </button>
+                        </form>
                     </div>
                 </header>
                 
@@ -535,7 +448,7 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                         <div>
                             <h3 className="text-lg font-bold text-slate-700">Đang rèn luyện ({inProgressWords.length})</h3>
-                            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded-full uppercase tracking-tighter mt-1 inline-block">B2 Vocabulary Target</span>
+                            <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2.5 py-1 rounded-full uppercase tracking-tighter mt-1 inline-block">Sổ từ vựng Nghiên cứu giáo trình</span>
                         </div>
                         {inProgressWords.length > 0 && (
                             <button 
@@ -555,7 +468,8 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
                     ) : (
                         <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-xl">
                             <Lightbulb className="mx-auto text-slate-300 mb-2" size={32}/>
-                            <p className="text-slate-500 text-sm">Chưa có từ vựng nào trong danh sách rèn luyện.</p>
+                            <p className="text-slate-500 text-sm">Chưa có từ vựng nào từ giáo trình trong danh sách rèn luyện.</p>
+                            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">Em có thể thêm từ vựng bằng cách double-click vào từ bất kỳ trong bài đọc/tài liệu giáo trình, hoặc gõ nhanh ở ô bên trên để tra cứu cứu hộ.</p>
                         </div>
                     )}
                 </section>
@@ -621,7 +535,7 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
                             ))}
                         </div>
                     ) : ( 
-                        <p className="text-slate-400 text-sm italic text-center py-6">Hãy rèn luyện chăm chỉ để đưa từ vựng vào danh sách chinh phục!</p>
+                        <p className="text-slate-400 text-sm italic text-center py-6">Hãy rèn luyện chăm chỉ để đưa từ vựng học tập vào danh sách chinh phục!</p>
                     )}
                 </section>
             </div>
