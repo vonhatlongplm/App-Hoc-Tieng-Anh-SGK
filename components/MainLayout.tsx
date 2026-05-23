@@ -67,14 +67,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   const handleSaveWord = (word: VocabularyWord) => {
     const exists = progress.vocabulary?.some(w => w.word === word.word);
     if (!exists) {
-        const newVocab = [...(progress.vocabulary || []), word];
+        const normalizedWord: VocabularyWord = {
+            ...word,
+            masteryLevel: typeof word.masteryLevel === 'number' && !isNaN(word.masteryLevel) ? word.masteryLevel : 0,
+            pronunciationAttempts: word.pronunciationAttempts || [],
+            savedAt: word.savedAt || Date.now(),
+            isBacklogged: word.isBacklogged || false
+        };
+        const newVocab = [...(progress.vocabulary || []), normalizedWord];
         handleUpdateProgress({ vocabulary: newVocab });
         setToast({ message: `Đã lưu từ "${word.word}"`, type: 'success' });
     }
   };
 
   const handleUpdateWord = (updatedWord: VocabularyWord) => {
-    const newVocab = progress.vocabulary?.map(w => w.word === updatedWord.word ? updatedWord : w) || [];
+    const normalizedWord: VocabularyWord = {
+        ...updatedWord,
+        masteryLevel: typeof updatedWord.masteryLevel === 'number' && !isNaN(updatedWord.masteryLevel) ? updatedWord.masteryLevel : 0,
+    };
+    const newVocab = progress.vocabulary?.map(w => w.word === updatedWord.word ? normalizedWord : w) || [];
     handleUpdateProgress({ vocabulary: newVocab });
   };
 

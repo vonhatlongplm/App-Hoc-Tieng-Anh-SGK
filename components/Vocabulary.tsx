@@ -178,7 +178,7 @@ const StudySession: React.FC<{ items: PracticeItem[]; words: VocabularyWord[]; o
     );
 };
 
-const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }) => {
+const Vocabulary: React.FC<VocabularyProps> = ({ words: rawWords, onUpdateWord, onDelete }) => {
   const [studySessionItems, setStudySessionItems] = useState<PracticeItem[] | null>(null);
   const [quickAddWord, setQuickAddWord] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -191,10 +191,24 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
       setTtsMode(newMode);
       localStorage.setItem('vocab_tts_mode', newMode);
   };
+
+  const getSafeMastery = (level: any) => {
+      const num = typeof level === 'number' ? level : parseInt(level, 10);
+      return isNaN(num) ? 0 : num;
+  };
+
+  const words: VocabularyWord[] = rawWords.map(w => ({
+      ...w,
+      masteryLevel: getSafeMastery(w.masteryLevel),
+      collocations: w.collocations?.map(c => ({
+          ...c,
+          masteryLevel: getSafeMastery(c.masteryLevel)
+      }))
+  })) as any;
   
   const isWordMastered = (word: VocabularyWord) => {
       // Only count the main word mastery for completion status
-      return word.masteryLevel >= 4;
+      return getSafeMastery(word.masteryLevel) >= 4;
   };
   
   const inProgressWords = words.filter(w => !isWordMastered(w) && !w.isBacklogged).sort((a,b) => b.savedAt - a.savedAt);
@@ -206,8 +220,9 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
     
     if (item.type === 'word') {
         const word = item.data;
-        if (word.masteryLevel < 4) {
-            for (let i = word.masteryLevel; i < 4; i++) {
+        const currentMastery = getSafeMastery(word.masteryLevel);
+        if (currentMastery < 4) {
+            for (let i = currentMastery; i < 4; i++) {
                 items.push({ type: 'word', data: word, targetMastery: i });
             }
         } else {
@@ -218,8 +233,9 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
         }
     } else {
         const col = item.data;
-        if (col.masteryLevel < 4) {
-            for (let i = col.masteryLevel; i < 4; i++) {
+        const currentMastery = getSafeMastery(col.masteryLevel);
+        if (currentMastery < 4) {
+            for (let i = currentMastery; i < 4; i++) {
                 items.push({ ...item, targetMastery: i });
             }
         } else {
@@ -247,8 +263,9 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
       // Helper to generate all remaining levels for a word
       const generateWordLevels = (word: VocabularyWord) => {
           const levels: PracticeItem[] = [];
-          if (word.masteryLevel < 4) {
-              for (let i = word.masteryLevel; i < 4; i++) {
+          const currentMastery = getSafeMastery(word.masteryLevel);
+          if (currentMastery < 4) {
+              for (let i = currentMastery; i < 4; i++) {
                   levels.push({ type: 'word', data: word, targetMastery: i });
               }
           }
@@ -256,7 +273,7 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words, onUpdateWord, onDelete }
       };
 
       // Gather all candidate words (unmastered)
-      const candidates = [...inProgressWords, ...backlogWords].filter(w => w.masteryLevel < 4);
+      const candidates = [...inProgressWords, ...backlogWords].filter(w => getSafeMastery(w.masteryLevel) < 4);
       
       if (candidates.length === 0) {
           setIsSessionLoading(false);
