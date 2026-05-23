@@ -194,8 +194,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
         </div>
       </nav>
       
-      <div className="px-6 py-4 bg-teal-950/30 text-[10px] text-teal-500 uppercase tracking-widest font-bold">
-          v2.5 • AI-Native Experience
+      <div className="px-6 py-4 bg-teal-950/30 text-[10px] text-teal-400 uppercase tracking-widest font-black">
+          v2.6 • Research-Native Edition
       </div>
     </aside>
   );
