@@ -4,6 +4,24 @@ import { VocabularyWord, VocabularyCollocation } from '../types';
 import { getDistractors, analyzePronunciation, getReviewHint, getCollocationQuiz, lookupWord, selectStudySessionWords } from '../services/geminiService';
 import { useTTS, TTSMode } from '../hooks/useTTS';
 import { Trash2, Volume2, Lightbulb, Zap, CheckCircle2, XCircle, Ear, Mic, Loader2, CornerDownLeft, Archive, SkipForward, Sparkles, Image as ImageIcon, ChevronDown, Play, Keyboard, Library, Plus, ArrowRight } from 'lucide-react';
+
+const getRecordingMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const types = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/aac',
+        'audio/wav'
+    ];
+    for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+            return type;
+        }
+    }
+    return '';
+};
 // --- Helper Components ---
 
 const AudioWaveform: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
@@ -846,7 +864,9 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 setMediaStream(stream);
-                const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+                const mimeType = getRecordingMimeType();
+                const recorderOptions = mimeType ? { mimeType } : undefined;
+                const recorder = new MediaRecorder(stream, recorderOptions);
                 mediaRecorderRef.current = recorder;
                 
                 const audioChunks: Blob[] = [];
@@ -857,7 +877,8 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                 };
 
                 recorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                    const recordedMimeType = recorder.mimeType || mimeType || 'audio/webm';
+                    const audioBlob = new Blob(audioChunks, { type: recordedMimeType });
                     const audioUrl = URL.createObjectURL(audioBlob);
                     setRecordedAudioURL(audioUrl);
 
@@ -868,7 +889,7 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                         try {
                             const base64 = (reader.result as string).split(',')[1];
                             const targetPhrase = item.type === 'word' ? item.data.word : item.data.phrase;
-                            const result = await analyzePronunciation(base64, targetPhrase);
+                            const result = await analyzePronunciation(base64, targetPhrase, recordedMimeType);
                             setPronunciationFeedback({ text: result.feedback, isCorrect: result.isCorrect, score: result.score });
                             
                             if (result.isCorrect) {
@@ -895,7 +916,7 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                     };
                 };
 
-                recorder.start();
+                recorder.start(250);
                 setIsRecording(true);
             } catch (err) { console.error(err); }
         }

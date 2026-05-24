@@ -7,6 +7,24 @@ interface AudioRecorderProps {
   disabled?: boolean;
 }
 
+const getRecordingMimeType = () => {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+    'audio/aac',
+    'audio/wav'
+  ];
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return '';
+};
+
 const AudioRecorder: React.FC<AudioRecorderProps> = ({ onAudioRecorded, isProcessing, disabled }) => {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -25,7 +43,9 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onAudioRecorded, isProces
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = getRecordingMimeType();
+      const recorderOptions = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -36,13 +56,14 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({ onAudioRecorded, isProces
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
+        const recordedMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: recordedMimeType });
         onAudioRecorded(blob);
         // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setIsRecording(true);
     } catch (err) {
       console.error("Error accessing microphone:", err);

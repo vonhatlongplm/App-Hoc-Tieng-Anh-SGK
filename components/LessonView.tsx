@@ -572,7 +572,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             return;
         }
         
-        const analysis = await geminiService.analyzeSpeakingAudio(audioBase64);
+        const analysis = await geminiService.analyzeSpeakingAudio(audioBase64, audioBlob.type);
         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
         setIsProcessingAudio(false);
     };

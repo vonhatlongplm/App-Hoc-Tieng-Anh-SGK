@@ -169,7 +169,7 @@ Luôn đặt câu hỏi tương tác sau mỗi phần kiến thức.`;
   return result.text;
 };
 
-export const analyzePronunciation = async (audioBase64: string, targetText: string) => {
+export const analyzePronunciation = async (audioBase64: string, targetText: string, mimeType: string = 'audio/webm') => {
   const prompt = `Analyze the speaker's pronunciation of "${targetText}". Provide detailed and critical feedback in Vietnamese (tiếng Việt), highlighting specific phonemes (IPA sounds) mispronounced, dropped end-sounds, or incorrect stress so a Vietnamese speaker can easily understand how to correct it.
   
   MANDATORY format requirements:
@@ -187,7 +187,7 @@ export const analyzePronunciation = async (audioBase64: string, targetText: stri
   const contents = [
     { role: 'user', parts: [
       { text: prompt },
-      { inlineData: { data: audioBase64, mimeType: 'audio/webm' } }
+      { inlineData: { data: audioBase64, mimeType } }
     ]}
   ];
   
@@ -334,12 +334,12 @@ export const analyzeDiagnostic = async (grammar: string, writing: string, audioB
   };
 };
 
-export const analyzeSpeakingAudio = async (audioBase64: string) => {
+export const analyzeSpeakingAudio = async (audioBase64: string, mimeType: string = 'audio/webm') => {
   const prompt = `Analyze this speaking attempt. Transcription, pronunciation score (0-100), and feedback in Vietnamese.`;
   const contents = [
     { role: 'user', parts: [
       { text: prompt },
-      { inlineData: { data: audioBase64, mimeType: 'audio/webm' } }
+      { inlineData: { data: audioBase64, mimeType } }
     ]}
   ];
   const res = await generateContent(contents, "You are an English speaking coach.");
