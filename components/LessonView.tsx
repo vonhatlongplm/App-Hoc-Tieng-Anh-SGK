@@ -492,6 +492,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         
         const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', text: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
         addMessage(userMessage);
+        lastRespondedMsgId.current = userMessage.id;
 
         if (section === SectionId.TESTS) {
             // ... (diagnostic logic stays same)
@@ -541,6 +542,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 context: { section, lessonNumber } 
             };
             addMessage(userMessage);
+            lastRespondedMsgId.current = userMessage.id;
 
             const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
             const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
