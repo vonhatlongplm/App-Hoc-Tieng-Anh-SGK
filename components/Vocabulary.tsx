@@ -1155,7 +1155,7 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                                             <div className="text-[10px] uppercase tracking-widest opacity-70">Điểm</div>
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm font-bold text-left leading-snug">{pronunciationFeedback.text}</p>
+                                            <p className="text-sm font-medium text-left leading-relaxed whitespace-pre-line text-slate-800">{pronunciationFeedback.text.replace(/\*\*/g, '').replace(/\*/g, '')}</p>
                                             {recordedAudioURL && !pronunciationFeedback.isCorrect && (
                                                 <button 
                                                     onClick={() => new Audio(recordedAudioURL).play()}

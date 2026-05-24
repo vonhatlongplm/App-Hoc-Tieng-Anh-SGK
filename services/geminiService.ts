@@ -172,6 +172,12 @@ Luôn đặt câu hỏi tương tác sau mỗi phần kiến thức.`;
 export const analyzePronunciation = async (audioBase64: string, targetText: string) => {
   const prompt = `Analyze the speaker's pronunciation of "${targetText}". Provide detailed and critical feedback in Vietnamese (tiếng Việt), highlighting specific phonemes (IPA sounds) mispronounced, dropped end-sounds, or incorrect stress so a Vietnamese speaker can easily understand how to correct it.
   
+  MANDATORY format requirements:
+  1. Do NOT use any bolding markers like double-stars (** or *) or other markdown symbols in the feedback.
+  2. Separate different points or key errors into clear, separate, numbered paragraphs or bullet points, separated by double line breaks (\\n\\n).
+  3. Start with a brief general assessment, followed by specific numbered points (e.g. 1., 2., 3.) detailing each sound or error, and conclude with a quick tip or word of encouragement.
+  4. Keep the text clean, readable, and perfectly structured.
+  
   Return a JSON object with: 
   { 
     "score": 0-100, 
