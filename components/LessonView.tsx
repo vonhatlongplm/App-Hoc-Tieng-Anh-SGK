@@ -279,6 +279,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const [diagnosticStep, setDiagnosticStep] = useState<any>('grammar');
     const [diagnosticGrammarAnswers, setDiagnosticGrammarAnswers] = useState<string | null>(null);
     const [diagnosticWritingAnswer, setDiagnosticWritingAnswer] = useState<string | null>(null);
+    const [startLessonFailed, setStartLessonFailed] = useState(false);
+    const [replyFailedMessageId, setReplyFailedMessageId] = useState<string | null>(null);
     
     const [selectionData, setSelectionData] = useState<any>(null);
     const [popoverData, setPopoverData] = useState<any>(null);
@@ -329,10 +331,12 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     useEffect(() => {
         hasStartedRef.current = false;
         lastRespondedMsgId.current = null;
+        setStartLessonFailed(false);
+        setReplyFailedMessageId(null);
     }, [section, lessonNumber]);
 
     useEffect(() => {
-        if (filteredMessages.length === 0 && !isReviewMode && !isThinking && !hasStartedRef.current) {
+        if (filteredMessages.length === 0 && !isReviewMode && !isThinking && !hasStartedRef.current && !startLessonFailed) {
             hasStartedRef.current = true;
             const startLesson = async () => {
                 if (isDiagnosticTest) {
@@ -343,13 +347,14 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         console.log("Starting lesson with Gemini...");
                         const responseText = await geminiService.sendMessageToGemini([], `Chào Thầy/Cô. Em muốn bắt đầu học bài ${lessonNumber}: ${lessonTitle}. Thầy/Cô hãy giới thiệu tổng quan và bắt đầu nhé.`, section as any, documentContent);
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+                        setStartLessonFailed(false);
                     } catch (e: any) {
                         console.error("Start Lesson Error:", e);
                         setToastMessage({ 
                             message: `Lỗi khi bắt đầu: ${e.message || "Gia sư không phản hồi."} (Vui lòng thử tải lại trang hoặc kiểm tra kết nối mạng.)`, 
                             type: "error" 
                         });
-                        hasStartedRef.current = false;
+                        setStartLessonFailed(true);
                     } finally {
                         setIsThinking(false);
                     }
@@ -358,7 +363,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             startLesson();
         } else if (filteredMessages.length > 0 && !isReviewMode && !isThinking) {
             const lastMsg = filteredMessages[filteredMessages.length - 1];
-            if (lastMsg.role === 'user' && !lastMsg.text.includes("[Đã gửi bài ghi âm") && lastMsg.id !== lastRespondedMsgId.current) {
+            if (lastMsg.role === 'user' && !lastMsg.text.includes("[Đã gửi bài ghi âm") && lastMsg.id !== lastRespondedMsgId.current && replyFailedMessageId !== lastMsg.id) {
                 lastRespondedMsgId.current = lastMsg.id;
                 // Trigger AI response for external user messages (like from ResearchView buttons)
                 const getReply = async () => {
@@ -371,10 +376,11 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             documentContent
                         );
                         addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+                        setReplyFailedMessageId(null);
                     } catch (e: any) {
                         console.error("AI Error:", e);
-                        // If it fails, we should clear the lastRespondedMsgId so the user can retry by re-adding or we can provide a retry button
-                        lastRespondedMsgId.current = null; 
+                        // Store the failed message ID to allow inline retry, but do NOT clear lastRespondedMsgId to avoid infinite loops
+                        setReplyFailedMessageId(lastMsg.id);
                         setToastMessage({ message: `Lỗi: ${e.message || "Gia sư gặp lỗi khi phản hồi"}`, type: "error" });
                     } finally {
                         setIsThinking(false);
@@ -383,7 +389,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 getReply();
             }
         }
-    }, [filteredMessages, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking, documentContent]);
+    }, [filteredMessages, isDiagnosticTest, isReviewMode, lessonNumber, lessonTitle, section, addMessage, setToastMessage, isThinking, documentContent, startLessonFailed, replyFailedMessageId]);
 
     const prevMsgLength = useRef(filteredMessages.length);
     useEffect(() => { 
@@ -493,6 +499,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', text: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
         addMessage(userMessage);
         lastRespondedMsgId.current = userMessage.id;
+        setReplyFailedMessageId(null);
 
         if (section === SectionId.TESTS) {
             // ... (diagnostic logic stays same)
@@ -512,8 +519,10 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         try {
             const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), trimmedText, section as any, documentContent);
             addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+            setReplyFailedMessageId(null);
         } catch (e: any) {
             console.error("AI Send Message Error:", e);
+            setReplyFailedMessageId(userMessage.id);
             setToastMessage({ message: `Lỗi: ${e.message || "Gia sư gặp lỗi khi phản hồi"}`, type: "error" });
         } finally {
             setIsThinking(false);
@@ -530,9 +539,10 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
 
         setIsThinking(true);
+        let userMessage: Message | null = null;
         try {
             const base64 = await blobToBase64(file);
-            const userMessage: Message = { 
+            userMessage = { 
                 id: `msg-img-${Date.now()}`, 
                 role: 'user', 
                 text: "Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.", 
@@ -543,12 +553,17 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             };
             addMessage(userMessage);
             lastRespondedMsgId.current = userMessage.id;
+            setReplyFailedMessageId(null);
 
             const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
             const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
             addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
         } catch (e: any) {
-            setToastMessage({ message: "Không thể xử lý hình ảnh này.", type: "error" });
+            console.error("Image Analysis Error:", e);
+            if (userMessage) {
+                setReplyFailedMessageId(userMessage.id);
+            }
+            setToastMessage({ message: `Lỗi: ${e.message || "Không thể phân tích hình ảnh này."}`, type: "error" });
         } finally {
             setIsThinking(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -574,9 +589,51 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             return;
         }
         
-        const analysis = await geminiService.analyzeSpeakingAudio(audioBase64, audioBlob.type);
-        addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
-        setIsProcessingAudio(false);
+        try {
+            const analysis = await geminiService.analyzeSpeakingAudio(audioBase64, audioBlob.type);
+            addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
+        } catch (e: any) {
+            console.error("Audio Speak Analysis Error:", e);
+            setToastMessage({ message: `Lỗi phân tích phát âm: ${e.message || "Gia sư không phản hồi. Hãy thử ghi âm lại."}`, type: "error" });
+        } finally {
+            setIsProcessingAudio(false);
+        }
+    };
+
+    const handleRetryStartLesson = () => {
+        setStartLessonFailed(false);
+        hasStartedRef.current = false;
+    };
+
+    const handleRetryReply = async (messageId: string) => {
+        const failedMsg = filteredMessages.find(m => m.id === messageId);
+        if (!failedMsg) return;
+
+        setIsThinking(true);
+        setReplyFailedMessageId(null);
+        lastRespondedMsgId.current = failedMsg.id;
+        
+        try {
+            const indexOfFailed = filteredMessages.findIndex(m => m.id === messageId);
+            const contextHistory = indexOfFailed !== -1 
+                ? filteredMessages.slice(0, indexOfFailed) 
+                : filteredMessages;
+
+            const responseText = await geminiService.sendMessageToGemini(
+                contextHistory.map(m => ({ role: m.role, text: m.text })), 
+                failedMsg.text, 
+                section as any, 
+                documentContent
+            );
+            addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
+            setReplyFailedMessageId(null);
+        } catch (e: any) {
+            console.error("Retry Reply Error:", e);
+            setReplyFailedMessageId(failedMsg.id);
+            setToastMessage({ message: `Lỗi: ${e.message || "Gia sư vẫn gặp lỗi khi phản hồi. Hãy đợi vài giây và thử lại!"}`, type: "error" });
+        } finally {
+            setIsThinking(false);
+        }
     };
 
     const handleWordDoubleClick = async (event: any, word: string) => {
@@ -680,6 +737,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         <button 
                             onClick={() => {
                                 hasStartedRef.current = false;
+                                setStartLessonFailed(false);
+                                setReplyFailedMessageId(null);
                                 onRestart();
                             }}
                             className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"
@@ -695,8 +754,44 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             </header>
             
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 messages-container bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px]">
+                {startLessonFailed && filteredMessages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center p-6 text-center max-w-sm mx-auto my-12 space-y-4 bg-white rounded-2xl border border-slate-200 shadow-md">
+                        <div className="p-4 bg-amber-50 rounded-full text-amber-500 border border-amber-200 animate-pulse">
+                            <Bot size={28} />
+                        </div>
+                        <h4 className="text-sm font-black text-slate-800">Không thể kết nối với Gia sư AI</h4>
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            Hiện tại hệ thống AI đang chịu tải trọng cao hoặc tạm thời hết lượt truy cập. Em vui lòng bấm nút dưới đây để kết nối thử lại nhé!
+                        </p>
+                        <button 
+                            onClick={handleRetryStartLesson}
+                            className="flex items-center gap-1.5 px-5 py-2 text-xs font-black uppercase text-white bg-teal-600 rounded-xl hover:bg-teal-700 shadow-lg shadow-teal-600/20 active:scale-95 transition-all cursor-pointer"
+                        >
+                            <RefreshCw size={12} /> Thử lại ngay
+                        </button>
+                    </div>
+                )}
                 {filteredMessages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(msg.id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
+                    <React.Fragment key={msg.id}>
+                        <MessageBubble message={msg} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(msg.id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
+                        {replyFailedMessageId === msg.id && (
+                            <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 border border-red-200 text-red-500 flex items-center justify-center shadow-sm"><Bot size={18} /></div>
+                                <div className="p-4 rounded-2xl bg-red-50 text-slate-700 rounded-bl-none border border-red-100 flex flex-col items-start gap-2 shadow-sm max-w-sm">
+                                    <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
+                                        <span>Gia sư gặp sự cố khi tải phản hồi...</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 leading-normal font-medium">Hệ thống đang quá tải tạm thời hoặc gặp sự cố mạng. Em vui lòng thử bấm gửi lại nhé.</p>
+                                    <button 
+                                        onClick={() => handleRetryReply(msg.id)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        <RefreshCw size={10} /> Gửi lại câu hỏi
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </React.Fragment>
                 ))}
                 {isThinking && (
                     <div className="flex items-start gap-3 animate-pulse">
