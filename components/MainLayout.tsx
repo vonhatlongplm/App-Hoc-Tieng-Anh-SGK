@@ -93,7 +93,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             masteryLevel: typeof c.masteryLevel === 'number' && !isNaN(c.masteryLevel) ? c.masteryLevel : 0
         })) || []
     };
-    const newVocab = progress.vocabulary?.map(w => w.word === updatedWord.word ? normalizedWord : w) || [];
+    const exists = progress.vocabulary?.some(w => w.word === updatedWord.word);
+    let newVocab;
+    if (exists) {
+        newVocab = progress.vocabulary?.map(w => w.word === updatedWord.word ? normalizedWord : w) || [];
+    } else {
+        newVocab = [...(progress.vocabulary || []), normalizedWord];
+    }
     handleUpdateProgress({ vocabulary: newVocab });
   };
 
