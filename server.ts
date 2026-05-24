@@ -10,6 +10,7 @@ import { GEMINI_MODEL } from "./constants";
 
 let genAI: any = null;
 let fileManager: GoogleAIFileManager | null = null;
+let cachedBestModel: string | null = null;
 
 const upload = multer({ dest: os.tmpdir() });
 
@@ -31,9 +32,15 @@ const getGenAI = () => {
 
 // Resilient helper to list available models and select the best supported one
 const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<string> => {
+  if (cachedBestModel) return cachedBestModel;
   try {
     console.log("[Omni-SDK-v3] Querying available models for this API key...");
-    const modelsResponse = await ai.models.list();
+    
+    // Add a 3000ms timeout to avoid hanging the entire request on start if list() hangs
+    const listPromise = ai.models.list();
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout listing models")), 3000));
+    
+    const modelsResponse = await Promise.race([listPromise, timeoutPromise]) as any;
     const list = modelsResponse?.page || [];
     
     const modelNames = list.map((m: any) => m.name?.replace(/^models\//, '') || "");
@@ -42,12 +49,14 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     // 1. Check exact match
     const exactMatch = list.find((m: any) => m.name && m.name.toLowerCase().replace(/^models\//, '') === preferredModel.toLowerCase());
     if (exactMatch && exactMatch.name) {
-      return exactMatch.name.replace(/^models\//, '');
+      cachedBestModel = exactMatch.name.replace(/^models\//, '');
+      return cachedBestModel;
     }
     
     // 2. Candidate pool in priority order
     const fallbackCandidates = [
       "gemini-3.5-flash",
+      "gemini-2.1-flash",
       "gemini-2.5-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-latest"
@@ -55,6 +64,7 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     for (const cand of fallbackCandidates) {
       if (modelNames.includes(cand)) {
         console.log(`[Omni-SDK-v3] Falling back to supported available candidate: ${cand}`);
+        cachedBestModel = cand;
         return cand;
       }
     }
@@ -68,7 +78,8 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     if (supportedModel && supportedModel.name) {
       const selected = supportedModel.name.replace(/^models\//, '');
       console.log(`[Omni-SDK-v3] Selecting first API model supporting generateContent: ${selected}`);
-      return selected;
+      cachedBestModel = selected;
+      return cachedBestModel;
     }
     
     // 4. Any model keyword match
@@ -76,7 +87,8 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     if (geminiModel && geminiModel.name) {
       const selected = geminiModel.name.replace(/^models\//, '');
       console.log(`[Omni-SDK-v3] Selecting any Gemini model: ${selected}`);
-      return selected;
+      cachedBestModel = selected;
+      return cachedBestModel;
     }
   } catch (err) {
     console.error("[Omni-SDK-v3] Warning: Failed to retrieve models from list API:", err);
@@ -264,9 +276,54 @@ async function startServer() {
             const errStr = String(err).toLowerCase();
             const isRateLimit = err.status === 429 || err.code === 429 || errStr.includes("429") || errStr.includes("exhausted") || errStr.includes("quota") || errStr.includes("rate limit") || errStr.includes("limit_exceeded");
             const isNotFoundError = err.status === 404 || err.code === 404 || errStr.includes("404") || errStr.includes("not found") || errStr.includes("not_found") || errStr.includes("unsupported");
+            const isAuthError = err.status === 401 || err.status === 403 || errStr.includes("api key") || errStr.includes("api_key") || errStr.includes("unauthorized") || errStr.includes("invalid key");
+
+            // Self-heal: If it is a file-related or bad request error, and we passed files, try to scrub files and retry text-only
+            const isFileError = errStr.includes("file") || errStr.includes("uri") || errStr.includes("blob") || errStr.includes("not found") || errStr.includes("404") || errStr.includes("expired") || errStr.includes("400") || errStr.includes("invalid argument");
+            if (isFileError && Array.isArray(finalContents) && finalContents.some((c: any) => c.parts?.some((p: any) => p.fileData))) {
+              console.warn("[Omni-SDK-v3] File-related error encountered. Self-healing by removing fileData parts and retrying immediately...");
+              const scrubbedContents = finalContents.map((c: any) => ({
+                ...c,
+                parts: c.parts?.filter((p: any) => !p.fileData) || []
+              })).filter((c: any) => c.parts.length > 0);
+              
+              if (scrubbedContents.length > 0) {
+                try {
+                  response = await ai.models.generateContent({ 
+                    model: modelToTry,
+                    contents: scrubbedContents,
+                    config: {
+                      systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
+                      temperature: 0.7,
+                      topP: 0.95,
+                      topK: 64,
+                      maxOutputTokens: 2048,
+                      safetySettings: [
+                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+                      ]
+                    }
+                  });
+                  activeModel = modelToTry;
+                  lastError = null;
+                  console.log(`[Omni-SDK-v3] Self-healed successfully using text-only format on model: ${modelToTry}`);
+                  modelSuccess = true;
+                  break;
+                } catch (scrubErr: any) {
+                  console.error("[Omni-SDK-v3] Text-only self-heal failed as well:", scrubErr);
+                }
+              }
+            }
 
             console.warn(`[Omni-SDK-v3] Dev Server attempt ${i + 1}, Retry ${r + 1}/${retries} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
             
+            if (isAuthError) {
+              console.error("[Omni-SDK-v3] Auth error detected. Breaking retry loop.");
+              break;
+            }
+
             if (isRateLimit && r < retries - 1) {
               console.log(`[Omni-SDK-v3] Quota limit hit. Sleeping ${delay}ms before retry...`);
               await new Promise(resolve => setTimeout(resolve, delay));
@@ -277,7 +334,14 @@ async function startServer() {
           }
         }
 
+        const lastErrStr = String(lastError).toLowerCase();
+        const isAuthErrorGlobal = lastError?.status === 401 || lastError?.status === 403 || lastErrStr.includes("api key") || lastErrStr.includes("api_key") || lastErrStr.includes("unauthorized") || lastErrStr.includes("invalid key");
+        const isQuotaGlobal = lastError?.status === 429 || lastError?.code === 429 || lastErrStr.includes("429") || lastErrStr.includes("exhausted") || lastErrStr.includes("quota") || lastErrStr.includes("rate limit");
+
         if (modelSuccess && response) {
+          break;
+        } else if (isAuthErrorGlobal || isQuotaGlobal) {
+          console.log(`[Omni-SDK-v3] Fail-fast triggered due to Auth/Quota error. Skipping other fallback models.`);
           break;
         } else if (i < fallbackModels.length - 1) {
           console.log("[Omni-SDK-v3] Sleeping 1000ms before falling back to next prioritized model...");
@@ -286,17 +350,30 @@ async function startServer() {
       }
 
       if (lastError && !response) {
+        const lastErrStr = String(lastError).toLowerCase();
+        const isAuthErrorMsg = lastError?.status === 401 || lastError?.status === 403 || lastErrStr.includes("api key") || lastErrStr.includes("api_key") || lastErrStr.includes("unauthorized") || lastErrStr.includes("invalid key");
+        
+        if (isAuthErrorMsg) {
+          throw lastError;
+        }
+
         console.warn("[Omni-SDK-v3] Primary dev server model cascade failed. Attempting absolute emergency bypass call with standard gemini-3.5-flash...");
         try {
+          // Send scrubbed contents if there was any file error
+          const scrubbedContents = finalContents.map((c: any) => ({
+            ...c,
+            parts: c.parts?.filter((p: any) => !p.fileData) || []
+          })).filter((c: any) => c.parts.length > 0);
+
           response = await ai.models.generateContent({
             model: "gemini-3.5-flash",
-            contents: finalContents
+            contents: scrubbedContents.length > 0 ? scrubbedContents : finalContents
           });
         } catch (finalErr: any) {
           console.error("[Omni-SDK-v3] Dev server emergency bypass failed as well: ", finalErr);
           const isQuota = String(finalErr).toLowerCase().includes("exhausted") || String(finalErr).toLowerCase().includes("quota") || String(finalErr).toLowerCase().includes("429");
           if (isQuota) {
-            throw new Error("Tài khoản API Key đang hết lượt dùng (RESOURCE_EXHAUSTED). Vui lòng đợi khoảng 15-30 giây để hệ thống tự động thiết lập lại quota. Nhờ kiến trúc tối ưu tự động của Omni, hệ thống sẽ tự khôi phục sau giây lát!");
+            throw new Error("Tài khoản API Key đang hết lượt dùng (RESOURCE_EXHAUSTED). Vui lòng đợi khoảng 15-30 giây để hệ thống tự động thiết lập lại quota. Nhờ cấu trúc tự phục hồi của Omni, hệ thống sẽ tự khôi phục sau giây lát!");
           }
           throw finalErr;
         }
