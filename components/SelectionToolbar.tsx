@@ -31,7 +31,7 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
     if (!selectionData || !toolbarRef.current) return;
     
     const toolbarHeight = window.innerWidth < 768 ? 72 : 52;
-    const toolbarWidth = isSingleWord ? (window.innerWidth < 768 ? 240 : 190) : (window.innerWidth < 768 ? 180 : 140);
+    const toolbarWidth = window.innerWidth < 768 ? 240 : 190;
     
     // On mobile, try to position below the selection to avoid native menu overlap if possible
     const isMobile = window.innerWidth < 768;
@@ -52,7 +52,7 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
     }
     
     setPosition({ top, left, opacity: 1 });
-  }, [selectionData, isSingleWord]);
+  }, [selectionData]);
 
   const iconSize = window.innerWidth < 768 ? 28 : 24;
 
@@ -69,23 +69,20 @@ const SelectionToolbar: React.FC<SelectionToolbarProps> = ({ selectionData, onLo
       onMouseDown={(e) => e.preventDefault()} // Ngăn chặn mất vùng chọn trên desktop
       className="fixed z-[9999] flex items-center gap-1 bg-slate-900/98 backdrop-blur-lg text-white p-2 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] border border-slate-700 transition-all duration-300 select-none"
     >
-      {isSingleWord && (
-        <>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onLookup(selectionData.text);
-            }}
-            className="p-3 sm:p-3 rounded-xl hover:bg-teal-500/30 text-teal-400 transition-all active:scale-90 group"
-            title="Tra cứu từ vựng"
-          >
-            <BookOpen size={iconSize} className="group-hover:scale-110 transition-transform" />
-          </button>
-          <div className="w-px h-8 bg-slate-700/50 mx-1"></div>
-        </>
-      )}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onLookup(selectionData.text);
+        }}
+        className="p-3 sm:p-3 rounded-xl hover:bg-teal-500/30 text-teal-400 transition-all active:scale-90 group"
+        title="Tra cứu từ vựng hoặc cụm từ"
+      >
+        <BookOpen size={iconSize} className="group-hover:scale-110 transition-transform" />
+      </button>
+      
+      <div className="w-px h-8 bg-slate-700/50 mx-1"></div>
       
       <button
         type="button"

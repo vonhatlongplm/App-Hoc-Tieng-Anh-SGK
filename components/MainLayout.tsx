@@ -65,7 +65,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   };
 
   const handleSaveWord = (word: VocabularyWord) => {
-    const exists = progress.vocabulary?.some(w => w.word === word.word);
+    const exists = progress.vocabulary?.some(w => w.word.toLowerCase() === word.word.toLowerCase());
     if (!exists) {
         const normalizedWord: VocabularyWord = {
             ...word,
@@ -82,6 +82,45 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
         handleUpdateProgress({ vocabulary: newVocab });
         setToast({ message: `Đã lưu từ "${word.word}"`, type: 'success' });
     }
+  };
+
+  const handleSaveCollocation = (parentWord: any, col: any) => {
+    const parentName = parentWord.word;
+    const exists = progress.vocabulary?.some(w => w.word.toLowerCase() === parentName.toLowerCase());
+    
+    let newVocab = [...(progress.vocabulary || [])];
+    
+    if (exists) {
+      newVocab = newVocab.map(w => {
+        if (w.word.toLowerCase() === parentName.toLowerCase()) {
+          const colIsStored = w.collocations?.some(c => c.phrase.toLowerCase() === col.phrase.toLowerCase());
+          const newCols = colIsStored
+            ? w.collocations?.map(c => c.phrase.toLowerCase() === col.phrase.toLowerCase() ? { ...c, isSaved: true, masteryLevel: c.masteryLevel ?? 0 } : c) || []
+            : [...(w.collocations || []), { phrase: col.phrase, meaning: col.meaning, isSaved: true, masteryLevel: 0 }];
+          return { ...w, collocations: newCols };
+        }
+        return w;
+      });
+    } else {
+      const normalizedParent: VocabularyWord = {
+        word: parentWord.word,
+        meaning: parentWord.meaning || parentWord.definition || "",
+        definition: parentWord.definition || "",
+        example: parentWord.example || "",
+        ipa: parentWord.ipa || "",
+        partOfSpeech: parentWord.partOfSpeech || "word",
+        irregularForms: parentWord.irregularForms || "",
+        masteryLevel: 0,
+        pronunciationAttempts: [],
+        savedAt: Date.now(),
+        isBacklogged: false,
+        collocations: [{ phrase: col.phrase, meaning: col.meaning, isSaved: true, masteryLevel: 0 }]
+      };
+      newVocab.push(normalizedParent);
+    }
+    
+    handleUpdateProgress({ vocabulary: newVocab });
+    setToast({ message: `Đã lưu cụm từ "${col.phrase}"`, type: 'success' });
   };
 
   const handleUpdateWord = (updatedWord: VocabularyWord) => {
@@ -195,7 +234,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             }}
             savedVocabulary={progress.vocabulary || []}
             onSaveWord={(wordData) => handleSaveWord(wordData as VocabularyWord)}
-            onSaveCollocation={(p, c) => console.log("Save col", p, c)}
+            onSaveCollocation={(p, c) => handleSaveCollocation(p, c)}
             onHintRequest={() => handleUpdateProgress({ hintUsageCount: (progress.hintUsageCount || 0) + 1 })}
             onLessonComplete={() => {}}
             onBackToSyllabus={() => setCurrentSection(SectionId.LIBRARY)}

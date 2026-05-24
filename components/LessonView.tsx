@@ -708,11 +708,17 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
 
     const handleSelectionLookup = async (text: string) => {
         if (!selectionData) return;
-        const word = text.trim().split(/\s+/)[0].replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, "").toLowerCase();
+        const cleanedText = text.trim()
+            .replace(/^[.,/#!$%^&*¿?;:{}=\-_`~()"\s]+|[.,/#!$%^&*¿?;:{}=\-_`~()"\s]+$/g, "");
+        if (!cleanedText) return;
         const rect = selectionData.rect;
         try {
-            const result = await geminiService.lookupWord(word);
-            setPopoverData({ ...result, position: { top: rect.top - 10, left: rect.left }, isSaved: savedVocabulary.some(v => v.word.toLowerCase() === word) });
+            const result = await geminiService.lookupWord(cleanedText);
+            setPopoverData({ 
+                ...result, 
+                position: { top: rect.top - 10, left: rect.left }, 
+                isSaved: savedVocabulary.some(v => v.word.toLowerCase() === cleanedText.toLowerCase()) 
+            });
             setSelectionData(null);
         } catch (e: any) {
             setToastMessage({ message: e.message || "Không thể tra cứu cụm từ này.", type: "error" });
