@@ -137,50 +137,69 @@ export default async function handler(req: any, res: any) {
       "gemini-3.5-flash",
       "gemini-2.5-flash",
       "gemini-3.1-flash-lite",
-      "gemini-flash-latest"
+      "gemini-flash-latest",
+      "gemini-1.5-flash"
     ];
     // Remove duplicates but keep primary order intact
-    fallbackModels = Array.from(new Set(fallbackModels)).filter(m => m !== "gemini-1.5-flash" && m !== "gemini-1.5-flash-8b");
+    fallbackModels = Array.from(new Set(fallbackModels)).filter(m => m !== "gemini-1.5-flash-8b");
 
     let lastError = null;
     for (let i = 0; i < fallbackModels.length; i++) {
       const modelToTry = fallbackModels[i];
       console.log(`[Omni-SDK-v3] Vercel API generation effort (Attempt ${i + 1}/${fallbackModels.length}) using Model: ${modelToTry}`);
-      try {
-        response = await ai.models.generateContent({ 
-          model: modelToTry,
-          contents: finalContents,
-          config: {
-            systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
-            temperature: 0.7,
-            topP: 0.95,
-            topK: 64,
-            maxOutputTokens: 4096, // Optimizing token size limits under free-tier quotas to be safe
-            safetySettings: [
-              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-            ]
-          }
-        });
-        
-        activeModel = modelToTry;
-        lastError = null;
-        console.log(`[Omni-SDK-v3] Generation successful with model: ${modelToTry}`);
-        break;
-      } catch (err: any) {
-        lastError = err;
-        const errStr = String(err).toLowerCase();
-        const isRateLimit = err.status === 429 || err.code === 429 || errStr.includes("429") || errStr.includes("exhausted") || errStr.includes("quota") || errStr.includes("rate limit") || errStr.includes("limit_exceeded");
-        const isNotFoundError = err.status === 404 || err.code === 404 || errStr.includes("404") || errStr.includes("not found") || errStr.includes("not_found") || errStr.includes("unsupported");
+      
+      let retries = 3;
+      let delay = 2000;
+      let modelSuccess = false;
 
-        console.warn(`[Omni-SDK-v3] Attempt ${i + 1} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
-        
-        if (isRateLimit && i < fallbackModels.length - 1) {
-          console.log("[Omni-SDK-v3] Quota limit hit. Sleeping 1500ms before falling back to next prioritized model...");
-          await new Promise(resolve => setTimeout(resolve, 1500));
+      for (let r = 0; r < retries; r++) {
+        try {
+          response = await ai.models.generateContent({ 
+            model: modelToTry,
+            contents: finalContents,
+            config: {
+              systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
+              temperature: 0.7,
+              topP: 0.95,
+              topK: 64,
+              maxOutputTokens: 4096, // Optimizing token size limits under free-tier quotas to be safe
+              safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+              ]
+            }
+          });
+          
+          activeModel = modelToTry;
+          lastError = null;
+          console.log(`[Omni-SDK-v3] Generation successful with model: ${modelToTry}`);
+          modelSuccess = true;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          const errStr = String(err).toLowerCase();
+          const isRateLimit = err.status === 429 || err.code === 429 || errStr.includes("429") || errStr.includes("exhausted") || errStr.includes("quota") || errStr.includes("rate limit") || errStr.includes("limit_exceeded");
+          const isNotFoundError = err.status === 404 || err.code === 404 || errStr.includes("404") || errStr.includes("not found") || errStr.includes("not_found") || errStr.includes("unsupported");
+
+          console.warn(`[Omni-SDK-v3] Attempt ${i + 1}, Retry ${r + 1}/${retries} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
+          
+          if (isRateLimit && r < retries - 1) {
+            console.log(`[Omni-SDK-v3] Quota limit hit. Sleeping ${delay}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2;
+          } else {
+            break;
+          }
         }
+      }
+
+      if (modelSuccess && response) {
+        break;
+      } else if (i < fallbackModels.length - 1) {
+        console.log("[Omni-SDK-v3] Sleeping 1000ms before falling back to next prioritized model...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 

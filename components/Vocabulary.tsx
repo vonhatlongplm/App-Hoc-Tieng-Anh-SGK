@@ -355,7 +355,10 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words: rawWords, onUpdateWord, 
   const handleQuickAdd = async (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = quickAddWord.trim();
-      if (!trimmed) return;
+      if (!trimmed) {
+          alert("Chào em! Để tra cứu từ vựng, em hãy gõ một từ tiếng Anh (ví dụ: 'education', 'research'...) vào ô trống bên cạnh rồi nhấn nút 'Thêm từ' nhé. Thầy/Cô sẽ hỗ trợ tra cứu nghĩa, phát âm IPA, ví dụ thực tế và tự động lưu thẳng vào danh sách rèn luyện cho em!");
+          return;
+      }
       
       setIsQuickAdding(true);
       const existingWords = new Set(words.map(w => w.word.toLowerCase()));
@@ -469,8 +472,8 @@ const Vocabulary: React.FC<VocabularyProps> = ({ words: rawWords, onUpdateWord, 
                             />
                             <button 
                                 type="submit"
-                                disabled={isQuickAdding || !quickAddWord.trim()}
-                                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                disabled={isQuickAdding}
+                                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
                             >
                                 {isQuickAdding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                                 <span>{isQuickAdding ? 'Đang tra...' : 'Thêm từ'}</span>
