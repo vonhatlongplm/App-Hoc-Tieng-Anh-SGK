@@ -907,9 +907,14 @@ const PracticeView: React.FC<{ item: PracticeItem; onUpdate: (word: VocabularyWo
                                 }
                                 onUpdate(finalWordUpdate);
                             }
-                        } catch (error) {
+                        } catch (error: any) {
                             console.error("Pronunciation analysis failed:", error);
-                            setPronunciationFeedback({ text: "Không thể phân tích giọng nói. Vui lòng thử lại.", isCorrect: false, score: 0 });
+                            const errMsg = error?.message || String(error);
+                            setPronunciationFeedback({ 
+                                text: `Không thể phân tích giọng nói. Lỗi: ${errMsg}. Vui lòng kiểm tra microphone hoặc thử lại.`, 
+                                isCorrect: false, 
+                                score: 0 
+                            });
                         } finally {
                             setIsLoading(false);
                         }

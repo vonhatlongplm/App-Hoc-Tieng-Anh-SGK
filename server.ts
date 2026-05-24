@@ -207,6 +207,11 @@ async function startServer() {
       }
 
       let activeModel = GEMINI_MODEL;
+      try {
+        activeModel = await getBestAvailableModel(ai, GEMINI_MODEL);
+      } catch (err) {
+        console.warn("[Omni-SDK-v3] Best available model check failed, using direct preferred:", err);
+      }
       console.log(`[Omni-SDK-v3] Initial dev server model request: ${activeModel}`);
       
       let response;

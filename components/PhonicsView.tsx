@@ -4,6 +4,24 @@ import { Volume2, Mic, Square, Loader2, CheckCircle, XCircle } from 'lucide-reac
 import { analyzePronunciation } from '../services/geminiService';
 import { useTTS } from '../hooks/useTTS';
 
+const getRecordingMimeType = () => {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+    'audio/aac',
+    'audio/wav'
+  ];
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  return '';
+};
+
 const PhonicsView: React.FC = () => {
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [recordingWord, setRecordingWord] = useState<string | null>(null);
@@ -19,26 +37,30 @@ const PhonicsView: React.FC = () => {
   const startRecording = async (word: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      const mimeType = getRecordingMimeType();
+      const recorderOptions = mimeType ? { mimeType } : undefined;
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       
-      mediaRecorderRef.current.ondataavailable = (e) => {
+      mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       
-      mediaRecorderRef.current.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      mediaRecorder.onstop = async () => {
+        const recordedMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: recordedMimeType });
         const reader = new FileReader();
         reader.readAsDataURL(blob);
         reader.onloadend = async () => {
           const base64data = (reader.result as string).split(',')[1];
-          handleAnalyze(word, base64data);
+          handleAnalyze(word, base64data, recordedMimeType);
         };
         
         stream.getTracks().forEach(track => track.stop());
       };
       
-      mediaRecorderRef.current.start();
+      mediaRecorder.start(250);
       setRecordingWord(word);
     } catch (err) {
       console.error("Error accessing microphone:", err);
@@ -53,14 +75,15 @@ const PhonicsView: React.FC = () => {
     }
   };
 
-  const handleAnalyze = async (word: string, audioBase64: string) => {
+  const handleAnalyze = async (word: string, audioBase64: string, mimeType: string = 'audio/webm') => {
     setAnalyzingWord(word);
     try {
-      const result = await analyzePronunciation(audioBase64, word);
+      const result = await analyzePronunciation(audioBase64, word, mimeType);
       setResults(prev => ({ ...prev, [word]: result }));
-    } catch (error) {
-      console.error("Analysis failed", error);
-      alert("Có lỗi khi phân tích âm thanh. Vui lòng thử lại.");
+    } catch (error: any) {
+      console.error("Analysis failed:", error);
+      const errMsg = error?.message || String(error);
+      alert(`Có lỗi khi phân tích âm thanh: ${errMsg}. Vui lòng thử lại.`);
     } finally {
       setAnalyzingWord(null);
     }
