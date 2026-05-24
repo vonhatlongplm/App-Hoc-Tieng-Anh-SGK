@@ -600,6 +600,64 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
     };
 
+    const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        if (isReviewMode || isThinking) return;
+
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        let imageFile: File | null = null;
+        let audioFile: File | null = null;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith('image/')) {
+                imageFile = item.getAsFile();
+                break; // Prioritize image pasting
+            } else if (item.type.startsWith('audio/')) {
+                audioFile = item.getAsFile();
+            }
+        }
+
+        if (imageFile) {
+            e.preventDefault();
+            setIsThinking(true);
+            let userMessage: Message | null = null;
+            try {
+                const base64 = await blobToBase64(imageFile);
+                userMessage = { 
+                    id: `msg-img-${Date.now()}`, 
+                    role: 'user', 
+                    text: "[Dán ảnh] Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.", 
+                    type: 'text', 
+                    timestamp: Date.now(), 
+                    imageUrls: [`data:${imageFile.type};base64,${base64}`],
+                    context: { section, lessonNumber } 
+                };
+                addMessage(userMessage);
+                lastRespondedMsgId.current = userMessage.id;
+                setReplyFailedMessageId(null);
+
+                const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
+                const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
+                addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+            } catch (err: any) {
+                console.error("Paste Image Analysis Error:", err);
+                if (userMessage) {
+                    setReplyFailedMessageId(userMessage.id);
+                }
+                setToastMessage({ message: `Lỗi: ${err.message || "Không thể phân tích hình ảnh đã dán."}`, type: "error" });
+            } finally {
+                setIsThinking(false);
+            }
+        } else if (audioFile) {
+            e.preventDefault();
+            // Inform student that the pasted audio file contains voice
+            setToastMessage({ message: "Đang tải âm thanh từ clipboard để gửi cho Gia sư...", type: "success" });
+            handleSendAudio(audioFile);
+        }
+    };
+
     const handleRetryStartLesson = () => {
         setStartLessonFailed(false);
         hasStartedRef.current = false;
@@ -830,7 +888,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             value={input} 
                             onChange={(e) => setInput(e.target.value)} 
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(input); } }} 
-                            placeholder={isReviewMode ? "Đang ở chế độ xem lại bài cũ..." : "Nhập câu trả lời hoặc câu hỏi của bạn..."} 
+                            onPaste={handlePaste}
+                            placeholder={isReviewMode ? "Đang ở chế độ xem lại bài cũ..." : "Nhập câu hỏi... (Em có thể dán trực tiếp Ảnh hoặc Âm thanh từ clipboard vào đây)"} 
                             disabled={isReviewMode || isThinking} 
                             className="w-full min-h-[44px] max-h-32 landscape:min-h-[36px] resize-none rounded-2xl border-2 border-slate-200 bg-white p-3 pr-24 text-sm font-medium focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 landscape:p-2 landscape:pr-20" 
                             rows={1} 
