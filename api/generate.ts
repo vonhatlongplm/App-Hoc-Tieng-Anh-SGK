@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash"; // Switched to 2.0 as primary default, can be overridden by environment variable
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash"; // Switched to 3.5 as primary default, can be overridden by environment variable
 
 let genAI: any = null;
 
@@ -42,9 +42,8 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     const fallbackCandidates = [
       "gemini-3.5-flash",
       "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite-preview",
-      "gemini-2.0-flash-exp"
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest"
     ];
     for (const cand of fallbackCandidates) {
       if (modelNames.includes(cand)) {
@@ -137,8 +136,8 @@ export default async function handler(req: any, res: any) {
       activeModel,
       "gemini-3.5-flash",
       "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite-preview"
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest"
     ];
     // Remove duplicates but keep primary order intact
     fallbackModels = Array.from(new Set(fallbackModels)).filter(m => m !== "gemini-1.5-flash" && m !== "gemini-1.5-flash-8b");

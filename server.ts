@@ -49,9 +49,8 @@ const getBestAvailableModel = async (ai: any, preferredModel: string): Promise<s
     const fallbackCandidates = [
       "gemini-3.5-flash",
       "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite-preview",
-      "gemini-2.0-flash-exp"
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest"
     ];
     for (const cand of fallbackCandidates) {
       if (modelNames.includes(cand)) {
@@ -219,8 +218,8 @@ async function startServer() {
         activeModel,
         "gemini-3.5-flash",
         "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite-preview"
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest"
       ];
       // Remove duplicates but keep primary order intact
       fallbackModels = Array.from(new Set(fallbackModels)).filter(m => m !== "gemini-1.5-flash" && m !== "gemini-1.5-flash-8b");
