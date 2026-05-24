@@ -40,6 +40,25 @@ const App: React.FC = () => {
     updatedAt: Date.now()
   });
 
+  const sanitizeProgress = (prog: any): UserProgress => {
+    if (!prog) return prog;
+    const getSafeMastery = (level: any) => {
+      const num = typeof level === 'number' ? level : parseInt(level, 10);
+      return isNaN(num) ? 0 : num;
+    };
+    return {
+      ...prog,
+      vocabulary: (prog.vocabulary || []).map((w: any) => ({
+        ...w,
+        masteryLevel: getSafeMastery(w.masteryLevel),
+        collocations: w.collocations?.map((c: any) => ({
+          ...c,
+          masteryLevel: getSafeMastery(c.masteryLevel)
+        })) || []
+      }))
+    };
+  };
+
   const handleLogin = async (user: any) => {
     setCurrentUser(user);
     setIsSyncing(true);
@@ -64,7 +83,7 @@ const App: React.FC = () => {
           messages: saved.messages || []
         };
         
-        setProgress(mergedProgress);
+        setProgress(sanitizeProgress(mergedProgress));
         
         if (saved.documentContent || (saved.uploadedMaterials && saved.uploadedMaterials.length > 0)) {
           setCurrentScreen('RESUME_PROMPT');
@@ -79,7 +98,7 @@ const App: React.FC = () => {
       console.error("Failed to load progress from server, attempting fallback", e);
       const savedFallback = await loadProgressFromFirebase(user.uid);
       if (savedFallback) {
-        setProgress(savedFallback);
+        setProgress(sanitizeProgress(savedFallback));
         setCurrentScreen('RESUME_PROMPT');
       } else {
         setProgress(createDefaultProgress(user));

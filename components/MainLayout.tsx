@@ -70,6 +70,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
         const normalizedWord: VocabularyWord = {
             ...word,
             masteryLevel: typeof word.masteryLevel === 'number' && !isNaN(word.masteryLevel) ? word.masteryLevel : 0,
+            collocations: word.collocations?.map(c => ({
+                ...c,
+                masteryLevel: typeof c.masteryLevel === 'number' && !isNaN(c.masteryLevel) ? c.masteryLevel : 0
+            })) || [],
             pronunciationAttempts: word.pronunciationAttempts || [],
             savedAt: word.savedAt || Date.now(),
             isBacklogged: word.isBacklogged || false
@@ -84,6 +88,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
     const normalizedWord: VocabularyWord = {
         ...updatedWord,
         masteryLevel: typeof updatedWord.masteryLevel === 'number' && !isNaN(updatedWord.masteryLevel) ? updatedWord.masteryLevel : 0,
+        collocations: updatedWord.collocations?.map(c => ({
+            ...c,
+            masteryLevel: typeof c.masteryLevel === 'number' && !isNaN(c.masteryLevel) ? c.masteryLevel : 0
+        })) || []
     };
     const newVocab = progress.vocabulary?.map(w => w.word === updatedWord.word ? normalizedWord : w) || [];
     handleUpdateProgress({ vocabulary: newVocab });
