@@ -736,15 +736,15 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         // Check cache first
         const cached = getCachedTranslation(text);
         if (cached) {
-            setTranslationPopoverData({ text: cached, position: pos, isLoading: false });
+            setTranslationPopoverData({ text: cached, position: pos, isLoading: false, originalText: text });
             return;
         }
 
-        setTranslationPopoverData({ text: '', position: pos, isLoading: true });
+        setTranslationPopoverData({ text: '', position: pos, isLoading: true, originalText: text });
         try {
             const translation = await geminiService.translateToVietnamese(text);
             setCachedTranslation(text, translation);
-            setTranslationPopoverData({ text: translation, position: pos, isLoading: false });
+            setTranslationPopoverData({ text: translation, position: pos, isLoading: false, originalText: text });
         } catch (e: any) {
             setToastMessage({ message: e.message || "Lỗi kết nối dịch thuật.", type: "error" });
             setTranslationPopoverData(null);
@@ -964,6 +964,8 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 <TranslationPopover 
                     data={translationPopoverData} 
                     onClose={closeAllPopups} 
+                    onSaveWord={onSaveWord}
+                    savedVocabulary={savedVocabulary}
                 />
             )}
         </div>
