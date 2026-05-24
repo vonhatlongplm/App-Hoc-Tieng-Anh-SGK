@@ -170,7 +170,14 @@ Luôn đặt câu hỏi tương tác sau mỗi phần kiến thức.`;
 };
 
 export const analyzePronunciation = async (audioBase64: string, targetText: string) => {
-  const prompt = `Analyze pronunciation of "${targetText}". Return JSON { score: 0-100, isCorrect: boolean, feedback: "..." }.`;
+  const prompt = `Analyze the speaker's pronunciation of "${targetText}". Provide detailed and critical feedback in Vietnamese (tiếng Việt), highlighting specific phonemes (IPA sounds) mispronounced, dropped end-sounds, or incorrect stress so a Vietnamese speaker can easily understand how to correct it.
+  
+  Return a JSON object with: 
+  { 
+    "score": 0-100, 
+    "isCorrect": boolean, 
+    "feedback": "Phản hồi chi tiết bằng tiếng Việt..." 
+  }`;
   const contents = [
     { role: 'user', parts: [
       { text: prompt },
@@ -178,7 +185,7 @@ export const analyzePronunciation = async (audioBase64: string, targetText: stri
     ]}
   ];
   
-  const res = await generateContent(contents, "You are a pronunciation expert.");
+  const res = await generateContent(contents, "You are an English pronunciation expert teaching Vietnamese students. Always provide detailed, precise, and constructive feedback in high-quality Vietnamese.");
   try {
     const jsonStr = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(jsonStr);
