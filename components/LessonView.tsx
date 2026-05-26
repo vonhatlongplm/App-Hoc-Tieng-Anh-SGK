@@ -293,6 +293,29 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const [stagedImage, setStagedImage] = useState<{ file: File; base64: string } | null>(null);
     const [stagedAudio, setStagedAudio] = useState<{ file: Blob; base64: string } | null>(null);
     
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            setToastMessage({ message: "Vui lòng chỉ tải lên tài liệu hình ảnh bài học.", type: "error" });
+            return;
+        }
+
+        try {
+            const base64 = await blobToBase64(file);
+            setStagedImage({ file, base64: `data:${file.type};base64,${base64}` });
+            setToastMessage({ message: "Đã chọn hình ảnh tải lên thành công! Em hãy ghi câu hỏi bổ sung rồi bấm Gửi nhé.", type: "success" });
+        } catch (err: any) {
+            console.error("Image Upload Error:", err);
+            setToastMessage({ message: "Lỗi xử lý hình ảnh tải lên.", type: "error" });
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+    
     const { playTTS, stopTTS, isTtsLoading } = useTTS();
     const [ttsMode, setTtsMode] = useState<'ai' | 'browser'>(() => {
         return (localStorage.getItem('vocab_tts_mode') as 'ai' | 'browser') || 'ai';
@@ -963,6 +986,13 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 <div className="flex items-end gap-3 w-full mx-auto">
                     <AudioRecorder onAudioRecorded={handleAudioRecorded} isProcessing={isProcessingAudio} disabled={isReviewMode} />
                     <div className="relative flex-1 group">
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleImageUpload} 
+                            className="hidden" 
+                            accept="image/*" 
+                        />
                         <textarea 
                             value={input} 
                             onChange={(e) => setInput(e.target.value)} 
@@ -970,10 +1000,19 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             onPaste={handlePaste}
                             placeholder={isReviewMode ? "Đang ở chế độ xem lại bài cũ..." : "Nhập câu hỏi... (Em có thể dán trực tiếp Ảnh hoặc Âm thanh từ clipboard vào đây)"} 
                             disabled={isReviewMode || isThinking} 
-                            className="w-full min-h-[44px] max-h-32 landscape:min-h-[36px] resize-none rounded-2xl border-2 border-slate-200 bg-white p-3 pr-24 text-sm font-medium focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 landscape:p-2 landscape:pr-20" 
+                            className="w-full min-h-[44px] max-h-32 landscape:min-h-[36px] resize-none rounded-2xl border-2 border-slate-200 bg-white p-3 pr-32 text-sm font-medium focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 landscape:p-2 landscape:pr-28" 
                             rows={1} 
                         />
                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                            {!isReviewMode && (
+                                <button 
+                                    onClick={() => fileInputRef.current?.click()} 
+                                    className="p-2 rounded-xl text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-all cursor-pointer" 
+                                    title="Tải ảnh bài học"
+                                >
+                                    <Paperclip size={18} />
+                                </button>
+                            )}
                             {!isReviewMode && (
                                 <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all cursor-pointer" title="Gợi ý">
                                     <Lightbulb size={18} />
