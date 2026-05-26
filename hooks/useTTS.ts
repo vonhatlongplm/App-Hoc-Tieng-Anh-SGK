@@ -32,6 +32,73 @@ const getGlobalAudio = () => {
   return getAudioPool().audio1;
 };
 
+interface SpeechSegment {
+  text: string;
+  lang: 'en' | 'vi';
+}
+
+const hasVietnameseDiacritics = (str: string): boolean => {
+  const viChars = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮĂẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸYĐ]/;
+  return viChars.test(str);
+};
+
+const hasAlphabet = (str: string): boolean => {
+  return /[a-zA-ZàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮĂẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸYĐ]/.test(str);
+};
+
+export const segmentTextForSpeech = (text: string): SpeechSegment[] => {
+  if (!text) return [];
+
+  // Split text by sentence boundaries, colons, brackets, and quotes to separate English and Vietnamese chunks
+  const parts = text.split(/([.!?]+(?:\s+|$)|[:;]+(?:\s+|$)|[\(\)\[\]“”"'`“]+|["']|[\-\+]\s+)/g);
+  
+  const rawSegments: { text: string; lang: 'en' | 'vi' | 'none' }[] = [];
+
+  for (const part of parts) {
+    if (!part) continue;
+    const trimmed = part.trim();
+    if (!trimmed) {
+      if (rawSegments.length > 0) {
+        rawSegments[rawSegments.length - 1].text += part;
+      }
+      continue;
+    }
+
+    if (!hasAlphabet(trimmed)) {
+      rawSegments.push({ text: part, lang: 'none' });
+    } else if (hasVietnameseDiacritics(trimmed)) {
+      rawSegments.push({ text: part, lang: 'vi' });
+    } else {
+      rawSegments.push({ text: part, lang: 'en' });
+    }
+  }
+
+  const mergedSegments: SpeechSegment[] = [];
+  
+  for (const seg of rawSegments) {
+    if (seg.lang === 'none') {
+      if (mergedSegments.length > 0) {
+        mergedSegments[mergedSegments.length - 1].text += seg.text;
+      } else {
+        mergedSegments.push({ text: seg.text, lang: 'en' });
+      }
+    } else {
+      if (mergedSegments.length > 0 && mergedSegments[mergedSegments.length - 1].lang === seg.lang) {
+        mergedSegments[mergedSegments.length - 1].text += seg.text;
+      } else {
+        mergedSegments.push({ text: seg.text, lang: seg.lang });
+      }
+    }
+  }
+
+  return mergedSegments
+    .map(s => ({
+      text: s.text.trim(),
+      lang: s.lang
+    }))
+    .filter(s => s.text.length > 0 && hasAlphabet(s.text));
+};
+
 export const useTTS = () => {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -295,6 +362,8 @@ export const useTTS = () => {
           .replace(/^\s*>\s+/gm, '')
           // Remove list bullets / list indicators
           .replace(/^\s*[\*\-+]\s+/gm, '')
+          // Strip IPA phonetic transcriptions like /rɪˈsɜːtʃ/ or /tæp/ or /pɑːθ/ while preserving normal slash words like yes/no or s/he
+          .replace(/\/(?=[^\/\r\n]*[ˌˈːəɪʊæʌɒɔθðʃʒŋtʃdʒ\u0250-\u02AF])([^\/\r\n]+)\//g, '')
           // Remove line separators like ____________
           .replace(/[\\_L]{3,}/g, '');
 
@@ -308,9 +377,18 @@ export const useTTS = () => {
       };
 
       const cleanedText = cleanTextForSpeech(text);
-      const targetLang = isVietnamese(cleanedText) ? 'vi' : 'en';
+      
+      // Segment text into bilingual chunks
+      const segments = segmentTextForSpeech(cleanedText);
+      const chunks: { text: string; lang: 'en' | 'vi' }[] = [];
+      
+      for (const seg of segments) {
+        const segChunks = splitIntoChunks(seg.text, 160);
+        for (const chunk of segChunks) {
+          chunks.push({ text: chunk, lang: seg.lang });
+        }
+      }
 
-      const chunks = splitIntoChunks(cleanedText, 160);
       if (chunks.length === 0) {
         setIsLoading(false);
         onEndCallback?.();
@@ -328,8 +406,9 @@ export const useTTS = () => {
           return;
         }
 
-        const currentChunk = chunks[index];
-        const targetLang = isVietnamese(currentChunk) ? 'vi' : 'en';
+        const currentChunkObj = chunks[index];
+        const currentChunk = currentChunkObj.text;
+        const targetLang = currentChunkObj.lang;
 
         // Track chunk completion status to avoid duplicate progression
         let chunkCompleted = false;
@@ -422,8 +501,9 @@ export const useTTS = () => {
 
         // Set up preloading for the next chunk (index + 1) in browser CacheStorage
         if (index + 1 < chunks.length) {
-          const nextChunk = chunks[index + 1];
-          const nextLang = isVietnamese(nextChunk) ? 'vi' : 'en';
+          const nextChunkObj = chunks[index + 1];
+          const nextChunk = nextChunkObj.text;
+          const nextLang = nextChunkObj.lang;
           const nextProxyUrl = `/api/tts?text=${encodeURIComponent(nextChunk)}&lang=${nextLang}`;
           
           if (typeof window !== 'undefined' && 'caches' in window) {
