@@ -290,6 +290,9 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const [speechVoice, setSpeechVoice] = useState<'Puck' | 'Zephyr' | 'Kore' | 'Fenrir'>('Zephyr');
     const [translatingMessageIds, setTranslatingMessageIds] = useState<Set<string>>(new Set());
     
+    const [stagedImage, setStagedImage] = useState<{ file: File; base64: string } | null>(null);
+    const [stagedAudio, setStagedAudio] = useState<{ file: Blob; base64: string } | null>(null);
+    
     const { playTTS, stopTTS, isTtsLoading } = useTTS();
     const [ttsMode, setTtsMode] = useState<'ai' | 'browser'>(() => {
         return (localStorage.getItem('vocab_tts_mode') as 'ai' | 'browser') || 'ai';
@@ -487,22 +490,137 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         });
     };
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleSendMessage = async (text: string, audio?: Blob) => {
+    const handleSendMessage = async (text: string) => {
         if (isThinking || isProcessingAudio || isReviewMode) return;
+        
         const trimmedText = text.trim();
-        if (section === SectionId.TESTS && diagnosticStep !== 'speaking' && !trimmedText) return;
+        // If nothing is entered and there are no attachments, do nothing unless in diagnostic speaking
+        if (!trimmedText && !stagedImage && !stagedAudio && !(section === SectionId.TESTS && diagnosticStep === 'speaking')) {
+            return;
+        }
+
         setIsThinking(true);
         setInput('');
-        
+
+        // 1. TEXT + IMAGE STAGED FLOW
+        if (stagedImage) {
+            let userMessage: Message | null = null;
+            const finalImage = stagedImage;
+            setStagedImage(null); // Clear stage
+
+            const messageText = trimmedText || "Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.";
+
+            try {
+                userMessage = { 
+                    id: `msg-img-${Date.now()}`, 
+                    role: 'user', 
+                    text: messageText, 
+                    type: 'text', 
+                    timestamp: Date.now(), 
+                    imageUrls: [finalImage.base64],
+                    context: { section, lessonNumber } 
+                };
+                addMessage(userMessage);
+                lastRespondedMsgId.current = userMessage.id;
+                setReplyFailedMessageId(null);
+
+                const prompt = trimmedText 
+                    ? `Dựa trên cả hình ảnh đính kèm và câu hỏi này: "${trimmedText}". Thầy/Cô hãy phân tích nội dung hình ảnh, dịch nghĩa và giải đáp tận tình về từ vựng/ngữ pháp/phát âm cho em nhé.`
+                    : "Dựa trên hình ảnh em gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
+
+                const responseText = await geminiService.sendMessageToGemini(
+                    filteredMessages.map(m => ({ role: m.role, text: m.text, imageUrls: m.imageUrls })), 
+                    prompt, 
+                    section as any, 
+                    documentContent,
+                    userMessage.imageUrls
+                );
+                addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+            } catch (err: any) {
+                console.error("Staged Image Analysis Error:", err);
+                if (userMessage) {
+                    setReplyFailedMessageId(userMessage.id);
+                }
+                setToastMessage({ message: `Lỗi: ${err.message || "Không thể phân tích hình ảnh đính kèm."}`, type: "error" });
+            } finally {
+                setIsThinking(false);
+            }
+            return;
+        }
+
+        // 2. TEXT + AUDIO STAGED FLOW
+        if (stagedAudio) {
+            const finalAudio = stagedAudio;
+            setStagedAudio(null); // Clear stage
+            setIsProcessingAudio(true);
+
+            // Handle diagnostic speaking step specially
+            if (section === SectionId.PHONICS && diagnosticStep === 'speaking') {
+                setDiagnosticStep('submitting');
+                addMessage({ 
+                    id: `msg-${Date.now()}`, 
+                    role: 'user', 
+                    text: "[Đã gửi bài ghi âm chẩn đoán]", 
+                    type: 'audio_feedback', 
+                    timestamp: Date.now(), 
+                    audioBase64: finalAudio.base64, 
+                    context: { section: SectionId.TESTS, lessonNumber: 0 } 
+                });
+                try {
+                    const result = await geminiService.analyzeDiagnostic(diagnosticGrammarAnswers!, diagnosticWritingAnswer!, finalAudio.base64, "Học viên");
+                    onLessonComplete(section, lessonNumber, result);
+                } catch (e: any) { 
+                    setToastMessage({ message: e.message || "Lỗi phân tích bài thi. Hãy thử lại.", type: "error" });
+                    setDiagnosticStep('speaking'); 
+                } finally {
+                    setIsProcessingAudio(false);
+                    setIsThinking(false);
+                }
+                return;
+            }
+
+            const messageText = trimmedText || "[Gửi ghi âm phát âm]";
+
+            // Store current message as user speaking message
+            const userMessage: Message = { 
+                id: `msg-audio-${Date.now()}`, 
+                role: 'user', 
+                text: messageText, 
+                type: 'audio_feedback', 
+                timestamp: Date.now(), 
+                audioBase64: finalAudio.base64, 
+                context: { section, lessonNumber } 
+            };
+            addMessage(userMessage);
+            lastRespondedMsgId.current = userMessage.id;
+            setReplyFailedMessageId(null);
+
+            try {
+                const analysis = await geminiService.analyzeSpeakingAudio(finalAudio.base64, finalAudio.file.type, trimmedText || undefined);
+                addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64: finalAudio.base64, context: { section, lessonNumber } });
+            } catch (e: any) {
+                console.error("Audio Speak Analysis Error:", e);
+                setReplyFailedMessageId(userMessage.id);
+                setToastMessage({ message: `Lỗi phân tích phát âm: ${e.message || "Gia sư không phản hồi. Hãy thử ghi âm lại."}`, type: "error" });
+            } finally {
+                setIsProcessingAudio(false);
+                setIsThinking(false);
+            }
+            return;
+        }
+
+        // 3. TEXT-ONLY FLOW (Default)
+        if (section === SectionId.TESTS && diagnosticStep !== 'speaking' && !trimmedText) {
+            setIsThinking(false);
+            return;
+        }
+
         const userMessage: Message = { id: `msg-${Date.now()}`, role: 'user', text: trimmedText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } };
         addMessage(userMessage);
         lastRespondedMsgId.current = userMessage.id;
         setReplyFailedMessageId(null);
 
         if (section === SectionId.TESTS) {
-            // ... (diagnostic logic stays same)
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
                 addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: SectionId.TESTS, lessonNumber: 0 } });
@@ -529,74 +647,14 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-            setToastMessage({ message: "Vui lòng chỉ tải lên tệp hình ảnh.", type: "error" });
-            return;
-        }
-
-        setIsThinking(true);
-        let userMessage: Message | null = null;
+    const handleAudioRecorded = async (audioBlob: Blob) => {
         try {
-            const base64 = await blobToBase64(file);
-            userMessage = { 
-                id: `msg-img-${Date.now()}`, 
-                role: 'user', 
-                text: "Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.", 
-                type: 'text', 
-                timestamp: Date.now(), 
-                imageUrls: [`data:${file.type};base64,${base64}`],
-                context: { section, lessonNumber } 
-            };
-            addMessage(userMessage);
-            lastRespondedMsgId.current = userMessage.id;
-            setReplyFailedMessageId(null);
-
-            const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
-            const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
-            addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
-        } catch (e: any) {
-            console.error("Image Analysis Error:", e);
-            if (userMessage) {
-                setReplyFailedMessageId(userMessage.id);
-            }
-            setToastMessage({ message: `Lỗi: ${e.message || "Không thể phân tích hình ảnh này."}`, type: "error" });
-        } finally {
-            setIsThinking(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
-
-    const handleSendAudio = async (audioBlob: Blob) => {
-        if (isReviewMode) return;
-        setIsProcessingAudio(true);
-        const audioBase64 = await blobToBase64(audioBlob);
-        
-        if (section === SectionId.PHONICS && diagnosticStep === 'speaking') { // Dummy check for diagnostic
-            setDiagnosticStep('submitting');
-            addMessage({ id: `msg-${Date.now()}`, role: 'user', text: "[Đã gửi bài ghi âm chẩn đoán]", type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section: SectionId.TESTS, lessonNumber: 0 } });
-            try {
-                const result = await geminiService.analyzeDiagnostic(diagnosticGrammarAnswers!, diagnosticWritingAnswer!, audioBase64, "Học viên");
-                onLessonComplete(section, lessonNumber, result);
-            } catch (e: any) { 
-                setToastMessage({ message: e.message || "Lỗi phân tích bài thi. Hãy thử lại.", type: "error" });
-                setDiagnosticStep('speaking'); 
-            }
-            setIsProcessingAudio(false);
-            return;
-        }
-        
-        try {
-            const analysis = await geminiService.analyzeSpeakingAudio(audioBase64, audioBlob.type);
-            addMessage({ id: `msg-${Date.now()}`, role: 'model', text: analysis, type: 'audio_feedback', timestamp: Date.now(), audioBase64, context: { section, lessonNumber } });
-        } catch (e: any) {
-            console.error("Audio Speak Analysis Error:", e);
-            setToastMessage({ message: `Lỗi phân tích phát âm: ${e.message || "Gia sư không phản hồi. Hãy thử ghi âm lại."}`, type: "error" });
-        } finally {
-            setIsProcessingAudio(false);
+            const base64 = await blobToBase64(audioBlob);
+            setStagedAudio({ file: audioBlob, base64 });
+            setToastMessage({ message: "Đã ghi âm thành công! Em hãy đặt câu hỏi bổ sung (nếu có) rồi bấm nút Gửi để hoàn tất nhé.", type: "success" });
+        } catch (err: any) {
+            console.error("Audio Recorded Convert Error:", err);
+            setToastMessage({ message: "Lỗi chuẩn bị tệp âm thanh ghi âm.", type: "error" });
         }
     };
 
@@ -621,40 +679,24 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
 
         if (imageFile) {
             e.preventDefault();
-            setIsThinking(true);
-            let userMessage: Message | null = null;
             try {
                 const base64 = await blobToBase64(imageFile);
-                userMessage = { 
-                    id: `msg-img-${Date.now()}`, 
-                    role: 'user', 
-                    text: "[Dán ảnh] Em gửi hình ảnh bài học này, thầy/cô giúp em nghiên cứu nhé.", 
-                    type: 'text', 
-                    timestamp: Date.now(), 
-                    imageUrls: [`data:${imageFile.type};base64,${base64}`],
-                    context: { section, lessonNumber } 
-                };
-                addMessage(userMessage);
-                lastRespondedMsgId.current = userMessage.id;
-                setReplyFailedMessageId(null);
-
-                const prompt = "Dựa trên hình ảnh em vừa gửi, Thầy/Cô hãy phân tích nội dung, dịch nghĩa và hướng dẫn em học các từ vựng/ngữ pháp/phát âm có trong ảnh này nhé.";
-                const responseText = await geminiService.sendMessageToGemini(filteredMessages.map(m => ({ role: m.role, text: m.text })), prompt, section as any, documentContent);
-                addMessage({ id: `msg-res-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now() + 1, context: { section, lessonNumber } });
+                setStagedImage({ file: imageFile, base64: `data:${imageFile.type};base64,${base64}` });
+                setToastMessage({ message: "Đã dán ảnh thành công! Em hãy viết câu hỏi bổ sung rồi bấm Gửi nhé.", type: "success" });
             } catch (err: any) {
-                console.error("Paste Image Analysis Error:", err);
-                if (userMessage) {
-                    setReplyFailedMessageId(userMessage.id);
-                }
-                setToastMessage({ message: `Lỗi: ${err.message || "Không thể phân tích hình ảnh đã dán."}`, type: "error" });
-            } finally {
-                setIsThinking(false);
+                console.error("Paste Image Convert Error:", err);
+                setToastMessage({ message: "Lỗi dán hình ảnh.", type: "error" });
             }
         } else if (audioFile) {
             e.preventDefault();
-            // Inform student that the pasted audio file contains voice
-            setToastMessage({ message: "Đang tải âm thanh từ clipboard để gửi cho Gia sư...", type: "success" });
-            handleSendAudio(audioFile);
+            try {
+                const base64 = await blobToBase64(audioFile);
+                setStagedAudio({ file: audioFile, base64 });
+                setToastMessage({ message: "Đã dán âm thanh thành công! Em hãy viết câu hỏi rồi bấm Gửi nhé.", type: "success" });
+            } catch (err: any) {
+                console.error("Paste Audio Convert Error:", err);
+                setToastMessage({ message: "Lỗi dán âm thanh.", type: "error" });
+            }
         }
     };
 
@@ -678,10 +720,11 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                 : filteredMessages;
 
             const responseText = await geminiService.sendMessageToGemini(
-                contextHistory.map(m => ({ role: m.role, text: m.text })), 
+                contextHistory.map(m => ({ role: m.role, text: m.text, imageUrls: m.imageUrls })), 
                 failedMsg.text, 
                 section as any, 
-                documentContent
+                documentContent,
+                failedMsg.imageUrls
             );
             addMessage({ id: `msg-${Date.now()}`, role: 'model', text: responseText, type: 'text', timestamp: Date.now(), context: { section, lessonNumber } });
             setReplyFailedMessageId(null);
@@ -870,25 +913,55 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             </div>
 
             <div className="border-t border-slate-200 bg-white/90 backdrop-blur-md p-3 md:p-6 pb-6 md:pb-8 landscape:p-2 landscape:pb-2 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-                <div className="flex items-end gap-3 w-full mx-auto">
-                    <div className="flex flex-col gap-2">
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isReviewMode || isThinking}
-                            className="p-3 rounded-2xl bg-white border-2 border-slate-200 text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all shadow-sm"
-                            title="Tải ảnh bài học"
-                        >
-                            <Paperclip size={20} />
-                        </button>
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            onChange={handleImageUpload} 
-                            className="hidden" 
-                            accept="image/*" 
-                        />
-                        <AudioRecorder onAudioRecorded={handleSendAudio} isProcessing={isProcessingAudio} disabled={isReviewMode} />
+                {/* Previews for staged attachments */}
+                {(stagedImage || stagedAudio) && (
+                    <div className="mb-3 max-w-lg mx-auto flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                        {stagedImage && (
+                            <div className="relative group/img flex items-center gap-3 bg-slate-900 text-white border border-slate-800 p-2 rounded-2xl shadow-md">
+                                <img 
+                                    src={stagedImage.base64} 
+                                    alt="Ảnh đã dán" 
+                                    className="w-10 h-10 object-cover rounded-xl border border-white/10"
+                                    referrerPolicy="no-referrer"
+                                />
+                                <div className="text-left py-0.5 pr-2">
+                                    <p className="text-[11px] font-black uppercase text-teal-400 tracking-wider">Hình ảnh đã dán</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">({(stagedImage.file.size / 1024).toFixed(1)} KB)</p>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setStagedImage(null); }}
+                                    className="p-1 px-1.5 rounded-xl bg-white/10 hover:bg-red-500/20 hover:text-red-400 transition-colors text-slate-300 mr-1 cursor-pointer"
+                                    title="Xóa ảnh"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        )}
+                        {stagedAudio && (
+                            <div className="relative group/aud flex items-center gap-3 bg-slate-900 text-white border border-slate-800 p-2 rounded-2xl shadow-md">
+                                <div className="w-10 h-10 bg-teal-500/20 text-teal-400 rounded-xl flex items-center justify-center border border-teal-500/30">
+                                    <Volume2 size={16} />
+                                </div>
+                                <div className="text-left py-0.5 pr-2">
+                                    <p className="text-[11px] font-black uppercase text-teal-400 tracking-wider">Ghi âm/Âm thanh đã dán</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">({(stagedAudio.file.size / 1024).toFixed(1)} KB)</p>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setStagedAudio(null); }}
+                                    className="p-1 px-1.5 rounded-xl bg-white/10 hover:bg-red-500/20 hover:text-red-400 transition-colors text-slate-300 mr-1 cursor-pointer"
+                                    title="Xóa âm thanh"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        )}
                     </div>
+                )}
+
+                <div className="flex items-end gap-3 w-full mx-auto">
+                    <AudioRecorder onAudioRecorded={handleAudioRecorded} isProcessing={isProcessingAudio} disabled={isReviewMode} />
                     <div className="relative flex-1 group">
                         <textarea 
                             value={input} 
@@ -902,11 +975,15 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         />
                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                             {!isReviewMode && (
-                                <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all" title="Gợi ý">
+                                <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all cursor-pointer" title="Gợi ý">
                                     <Lightbulb size={18} />
                                 </button>
                             )}
-                            <button onClick={() => handleSendMessage(input)} disabled={isReviewMode || isThinking || !input.trim()} className="p-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/30 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95">
+                            <button 
+                                onClick={() => handleSendMessage(input)} 
+                                disabled={isReviewMode || isThinking || (!input.trim() && !stagedImage && !stagedAudio)} 
+                                className="p-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/30 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95 cursor-pointer"
+                            >
                                 <Send size={18} />
                             </button>
                         </div>

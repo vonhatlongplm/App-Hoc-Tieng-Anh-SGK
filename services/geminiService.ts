@@ -63,7 +63,7 @@ export const generateContent = async (contents: any, systemInstruction: string) 
   }
 };
 
-export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string) => {
+export const sendMessageToGemini = async (messages: any[], text: string, section?: string, documentContent?: string, imageUrls?: string[]) => {
   // Gemini history MUST start with 'user' role
   let firstUserIndex = -1;
   const historyParts = messages.map(m => {
@@ -112,10 +112,28 @@ export const sendMessageToGemini = async (messages: any[], text: string, section
   });
 
   // Add the new message, merging if the last role is 'user'
+  let lastUserPart: any;
   if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-    contents[contents.length - 1].parts.push({ text: text.substring(0, 5000) });
+    lastUserPart = contents[contents.length - 1];
+    lastUserPart.parts.push({ text: text.substring(0, 5000) });
   } else {
-    contents.push({ role: 'user', parts: [{ text: text.substring(0, 5000) }] });
+    lastUserPart = { role: 'user', parts: [{ text: text.substring(0, 5000) }] };
+    contents.push(lastUserPart);
+  }
+
+  // Add images to the latest message if present
+  if (imageUrls && imageUrls.length > 0) {
+    imageUrls.forEach((url: string) => {
+      const match = url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        lastUserPart.parts.push({
+          inlineData: {
+              mimeType: match[1],
+              data: match[2]
+          }
+        });
+      }
+    });
   }
   
   let textbookContext = '';
@@ -373,9 +391,10 @@ export const analyzeDiagnostic = async (grammar: string, writing: string, audioB
   };
 };
 
-export const analyzeSpeakingAudio = async (audioBase64: string, mimeType: string = 'audio/webm') => {
+export const analyzeSpeakingAudio = async (audioBase64: string, mimeType: string = 'audio/webm', customPrompt?: string) => {
   const cleanMimeType = (mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
-  const prompt = `Analyze this speaking attempt. Transcription, pronunciation score (0-100), and feedback in Vietnamese.`;
+  const basePrompt = `Analyze this speaking attempt. Transcription, pronunciation score (0-100), and feedback in Vietnamese.`;
+  const prompt = customPrompt ? `${basePrompt}\nHọc viên hỏi thêm: "${customPrompt}"` : basePrompt;
   const contents = [
     { role: 'user', parts: [
       { text: prompt },
