@@ -886,7 +886,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                                 onRestart();
                             }}
                             className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"
-                            title="Làm lại bài học"
+                            title="Làm mới cuộc trò chuyện (Xóa tin nhắn cũ để bắt đầu học phần mới)"
                         >
                             <RefreshCw size={16} />
                         </button>
