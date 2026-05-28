@@ -241,6 +241,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             setToastMessage={(toastObj) => setToast(toastObj as any)}
             onRestart={() => handleUpdateProgress({ messages: [] })}
             onUpdateMaterial={handleUpdateMaterial}
+            onSectionChange={(sec) => {
+               setCurrentSection(sec);
+               handleUpdateProgress({ currentSection: sec });
+            }}
           />
         );
       case SectionId.MY_VOCABULARY:

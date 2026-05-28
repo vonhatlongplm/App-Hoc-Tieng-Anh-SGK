@@ -18,6 +18,7 @@ interface ResearchViewProps {
   onRestart: () => void;
   currentSection: SectionId;
   onUpdateMaterial?: (materialId: string, updatedContent: string) => void;
+  onSectionChange?: (sec: SectionId) => void;
 }
 
 export const ResearchView: React.FC<ResearchViewProps> = (props) => {
