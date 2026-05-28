@@ -351,6 +351,15 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         countdown: number;
     } | null>(null);
 
+    const SEQUENTIAL_FLOW: Record<string, SectionId | null> = {
+      [SectionId.VOCABULARY]: SectionId.GRAMMAR,
+      [SectionId.GRAMMAR]: SectionId.READING,
+      [SectionId.READING]: SectionId.LISTENING,
+      [SectionId.LISTENING]: SectionId.WRITING,
+      [SectionId.WRITING]: SectionId.SPEAKING,
+      [SectionId.SPEAKING]: SectionId.TESTS,
+    };
+
     const SECTION_NAMES: Record<string, string> = {
       [SectionId.VOCABULARY]: "Từ vựng Unit",
       [SectionId.GRAMMAR]: "Ngữ pháp Unit",
@@ -378,28 +387,11 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         const hasTransitionWord = transitionIndicators.some(word => lowercaseText.includes(word));
         if (!hasTransitionWord) return null;
 
-        // Define target mappings
-        const targets = [
-            { id: SectionId.VOCABULARY, patterns: [/từ vựng/i, /vocabulary/i, /vocab/i] },
-            { id: SectionId.GRAMMAR, patterns: [/ngữ pháp/i, /grammar/i] },
-            { id: SectionId.READING, patterns: [/bài đọc/i, /đọc hiểu/i, /reading/i] },
-            { id: SectionId.LISTENING, patterns: [/bài nghe/i, /luyện nghe/i, /listening/i] },
-            { id: SectionId.WRITING, patterns: [/bài viết/i, /luyện viết/i, /writing/i] },
-            { id: SectionId.SPEAKING, patterns: [/luyện nói/i, /phần nói/i, /speaking/i] },
-            { id: SectionId.TESTS, patterns: [/luyện giải đề/i, /luyện đề/i, /đề thi/i, /practice exam/i, /tests/i] }
-        ];
+        // Force sequential structure - only the immediate next sequential section is allowed, no skipping or jumping
+        const nextSec = SEQUENTIAL_FLOW[currentSec];
+        if (!nextSec) return null;
 
-        for (const target of targets) {
-             if (target.id === currentSec) continue;
-
-             for (const pattern of target.patterns) {
-                  if (pattern.test(lowercaseText)) {
-                       return target.id;
-                  }
-             }
-        }
-
-        return null;
+        return nextSec;
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
