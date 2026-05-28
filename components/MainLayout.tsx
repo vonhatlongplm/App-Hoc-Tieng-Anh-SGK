@@ -239,7 +239,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             onLessonComplete={() => {}}
             onBackToSyllabus={() => setCurrentSection(SectionId.LIBRARY)}
             setToastMessage={(toastObj) => setToast(toastObj as any)}
-            onRestart={() => handleUpdateProgress({ messages: [] })}
+            onRestart={() => {
+                const currentSec = currentSection;
+                const filteredMsgs = (progress.messages || []).filter(msg => msg.context?.section !== currentSec);
+                handleUpdateProgress({ messages: filteredMsgs });
+            }}
             onUpdateMaterial={handleUpdateMaterial}
             onSectionChange={(sec) => {
                setCurrentSection(sec);

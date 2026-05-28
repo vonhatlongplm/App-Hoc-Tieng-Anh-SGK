@@ -351,6 +351,21 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         countdown: number;
     } | null>(null);
 
+    const [isSectionCompleted, setIsSectionCompleted] = useState(false);
+
+    const checkIsSectionCompleted = useCallback(() => {
+        try {
+            const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
+            setIsSectionCompleted(list.includes(section));
+        } catch (e) {
+            setIsSectionCompleted(false);
+        }
+    }, [section]);
+
+    useEffect(() => {
+        checkIsSectionCompleted();
+    }, [section, messages, checkIsSectionCompleted]);
+
     const SEQUENTIAL_FLOW: Record<string, SectionId | null> = {
       [SectionId.VOCABULARY]: SectionId.GRAMMAR,
       [SectionId.GRAMMAR]: SectionId.READING,
@@ -508,6 +523,15 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             const target = suggestedTransition.targetSection;
             setSuggestedTransition(null);
             if (onSectionChange) {
+                // Save current section as completed
+                try {
+                    const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
+                    if (!list.includes(section)) {
+                        list.push(section);
+                        localStorage.setItem('completed_sections', JSON.stringify(list));
+                    }
+                } catch (e) {}
+
                 onSectionChange(target);
                 setToastMessage({
                     message: `Đã tự động chuyển sang phần ${SECTION_NAMES[target]} theo hướng dẫn của gia sư!`,
@@ -522,7 +546,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, [suggestedTransition, onSectionChange]);
+    }, [suggestedTransition, onSectionChange, section]);
     
     const closeAllPopups = useCallback(() => {
         setPopoverData(null);
@@ -989,7 +1013,34 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             <RefreshCw size={16} />
                         </button>
                     )}
-                    <button onClick={() => onLessonComplete(section, lessonNumber)} className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase text-white bg-green-600 rounded-xl hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all active:scale-95">
+                    <button 
+                        onClick={() => {
+                            try {
+                                const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
+                                if (!list.includes(section)) {
+                                    list.push(section);
+                                    localStorage.setItem('completed_sections', JSON.stringify(list));
+                                }
+                            } catch (e) {}
+                            setIsSectionCompleted(true);
+                            onLessonComplete(section, lessonNumber);
+
+                            const nextSec = SEQUENTIAL_FLOW[section];
+                            if (nextSec) {
+                                setSuggestedTransition({
+                                    targetSection: nextSec,
+                                    name: SECTION_NAMES[nextSec] || String(nextSec),
+                                    countdown: 8
+                                });
+                            } else {
+                                setToastMessage({
+                                    message: "Chúc mừng em đã hoàn thành toàn bộ lộ trình học của Unit này! Xuất sắc lắm!",
+                                    type: "success"
+                                });
+                            }
+                        }} 
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase text-white bg-green-600 rounded-xl hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all active:scale-95"
+                    >
                         <CheckCircle size={14} className="sm:w-4 sm:h-4" /> <span>Xong</span>
                     </button>
                 </div>
@@ -1128,7 +1179,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             <button 
                                 onClick={() => setSuggestedTransition(null)}
-                                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-all font-semibold"
+                                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-all font-semibold animate-in fade-in"
                             >
                                 Đóng
                             </button>
@@ -1137,6 +1188,15 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                                     const target = suggestedTransition.targetSection;
                                     setSuggestedTransition(null);
                                     if (onSectionChange) {
+                                        // Save current section as completed
+                                        try {
+                                            const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
+                                            if (!list.includes(section)) {
+                                                list.push(section);
+                                                localStorage.setItem('completed_sections', JSON.stringify(list));
+                                            }
+                                        } catch (e) {}
+
                                         onSectionChange(target);
                                         setToastMessage({
                                             message: `Đã chuyển sang phần ${SECTION_NAMES[target]} theo hướng dẫn của gia sư!`,
@@ -1199,51 +1259,98 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                     </div>
                 )}
 
-                <div className="flex items-end gap-3 w-full mx-auto">
-                    <AudioRecorder onAudioRecorded={handleAudioRecorded} isProcessing={isProcessingAudio} disabled={isReviewMode} />
-                    <div className="relative flex-1 group">
-                        <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            onChange={handleImageUpload} 
-                            className="hidden" 
-                            accept="image/*" 
-                        />
-                        <textarea 
-                            value={input} 
-                            onChange={(e) => setInput(e.target.value)} 
-                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(input); } }} 
-                            onPaste={handlePaste}
-                            placeholder={isReviewMode ? "Đang ở chế độ xem lại bài cũ..." : "Nhập câu hỏi... (Em có thể dán trực tiếp Ảnh hoặc Âm thanh từ clipboard vào đây)"} 
-                            disabled={isReviewMode || isThinking} 
-                            className="w-full min-h-[44px] max-h-32 landscape:min-h-[36px] resize-none rounded-2xl border-2 border-slate-200 bg-white p-3 pr-32 text-sm font-medium focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 landscape:p-2 landscape:pr-28" 
-                            rows={1} 
-                        />
-                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                            {!isReviewMode && (
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()} 
-                                    className="p-2 rounded-xl text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-all cursor-pointer" 
-                                    title="Tải ảnh bài học"
-                                >
-                                    <Paperclip size={18} />
-                                </button>
-                            )}
-                            {!isReviewMode && (
-                                <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all cursor-pointer" title="Gợi ý">
-                                    <Lightbulb size={18} />
-                                </button>
-                            )}
+                {isSectionCompleted ? (
+                    <div className="mx-auto w-full max-w-lg bg-teal-50/90 border-2 border-teal-200/80 rounded-2xl p-4 md:p-5 flex flex-col items-center text-center gap-3.5 shadow-lg shadow-teal-700/5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-200 shadow-inner">
+                            <CheckCircle size={20} />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black text-teal-950 uppercase tracking-wider">Phần học này đã hoàn thành</h4>
+                            <p className="text-xs text-slate-600 mt-1 font-bold leading-relaxed">
+                                Em đã hoàn thành xuất sắc các nội dung của phần này. Hãy chuyển tiếp sang kỹ năng tiếp theo hoặc xem lại kiến thức nhé!
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-center w-full">
                             <button 
-                                onClick={() => handleSendMessage(input)} 
-                                disabled={isReviewMode || isThinking || (!input.trim() && !stagedImage && !stagedAudio)} 
-                                className="p-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/30 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95 cursor-pointer"
+                                onClick={() => {
+                                    try {
+                                        const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
+                                        const filtered = list.filter((s: string) => s !== section);
+                                        localStorage.setItem('completed_sections', JSON.stringify(filtered));
+                                    } catch (e) {}
+                                    setIsSectionCompleted(false);
+                                    if (onRestart) onRestart();
+                                }}
+                                className="flex-1 sm:flex-none px-4 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 font-bold border border-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer bg-white"
                             >
-                                <Send size={18} />
+                                Học lại phần này
                             </button>
+                            {SEQUENTIAL_FLOW[section] && (
+                                <button 
+                                    onClick={() => {
+                                        const target = SEQUENTIAL_FLOW[section]!;
+                                        if (onSectionChange) {
+                                            onSectionChange(target);
+                                            setToastMessage({
+                                                message: `Đã chuyển sang phần ${SECTION_NAMES[target]} để học tiếp!`,
+                                                type: "success"
+                                            });
+                                        }
+                                    }}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-teal-600 text-white hover:bg-teal-700 text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-teal-600/15 active:scale-95 transition-all animate-pulse"
+                                >
+                                    <span>Học tiếp phần {SECTION_NAMES[SEQUENTIAL_FLOW[section]!]}</span> ➔
+                                </button>
+                            )}
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex items-end gap-3 w-full mx-auto">
+                        <AudioRecorder onAudioRecorded={handleAudioRecorded} isProcessing={isProcessingAudio} disabled={isReviewMode} />
+                        <div className="relative flex-1 group">
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleImageUpload} 
+                                className="hidden" 
+                                accept="image/*" 
+                            />
+                            <textarea 
+                                value={input} 
+                                onChange={(e) => setInput(e.target.value)} 
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(input); } }} 
+                                onPaste={handlePaste}
+                                placeholder={isReviewMode ? "Đang ở chế độ xem lại bài cũ..." : "Nhập câu hỏi... (Em có thể dán trực tiếp Ảnh hoặc Âm thanh từ clipboard vào đây)"} 
+                                disabled={isReviewMode || isThinking} 
+                                className="w-full min-h-[44px] max-h-32 landscape:min-h-[36px] resize-none rounded-2xl border-2 border-slate-200 bg-white p-3 pr-32 text-sm font-medium focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 landscape:p-2 landscape:pr-28" 
+                                rows={1} 
+                            />
+                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                {!isReviewMode && (
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()} 
+                                        className="p-2 rounded-xl text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-all cursor-pointer" 
+                                        title="Tải ảnh bài học"
+                                    >
+                                        <Paperclip size={18} />
+                                    </button>
+                                )}
+                                {!isReviewMode && (
+                                    <button onClick={() => onHintRequest(filteredMessages[filteredMessages.length-1]?.text || lessonTitle, section)} className="p-2 rounded-xl text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-all cursor-pointer" title="Gợi ý">
+                                        <Lightbulb size={18} />
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => handleSendMessage(input)} 
+                                    disabled={isReviewMode || isThinking || (!input.trim() && !stagedImage && !stagedAudio)} 
+                                    className="p-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/30 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95 cursor-pointer"
+                                >
+                                    <Send size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {isDiagnosticTest && (
                     <div className="mt-2 flex justify-center gap-1.5 landscape:mt-1">
                         <div className={`w-10 h-1 rounded-full ${diagnosticStep === 'grammar' ? 'bg-teal-500 shadow-sm' : 'bg-slate-200'}`}></div>
