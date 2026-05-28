@@ -5,7 +5,25 @@ const MarkdownRenderer: React.FC<{
     text: string;
     onWordDoubleClick?: (event: React.MouseEvent, word: string) => void;
 }> = ({ text, onWordDoubleClick }) => {
-    const sanitizedText = text.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/\\_/g, '_');
+    const cleanLatexSymbols = (txt: string): string => {
+        return txt
+            .replace(/\$?\\\s*rightarrow\s*\$?/gi, '➔')
+            .replace(/\$?\\\s*Rightarrow\s*\$?/gi, '➔')
+            .replace(/\$?\\\s*to\s*\$?/gi, '➔')
+            .replace(/\$?\\\s*leftarrow\s*\$?/gi, '←')
+            .replace(/\$?\\\s*Leftarrow\s*\$?/gi, '⇐')
+            .replace(/\$?\\\s*leftrightarrow\s*\$?/gi, '↔')
+            .replace(/\$?\\\s*Leftrightarrow\s*\$?/gi, '⟺')
+            .replace(/\$?\\\s*cdot\s*\$?/gi, '•')
+            .replace(/\$?\\\s*times\s*\$?/gi, '×')
+            .replace(/\$?\\\s*geq\s*\$?/gi, '≥')
+            .replace(/\$?\\\s*leq\s*\$?/gi, '≤')
+            .replace(/\$?\\\s*neq\s*\$?/gi, '≠');
+    };
+
+    const sanitizedText = cleanLatexSymbols(
+        text.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/\\_/g, '_')
+    );
 
     const ensureHeadingSpacing = (txt: string): string => {
         const lines = txt.split('\n');
