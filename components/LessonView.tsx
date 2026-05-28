@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Message, Section, UserProgress, VocabularyWord, DiagnosticAttempt, SkillScore, SectionId } from '../types';
-import { ArrowLeft, Send, Lightbulb, CheckCircle, Loader2, User, Bot, Volume2, Save, Paperclip, X, Languages, Check, RefreshCw, Play, Pause, Download, Sparkles, Keyboard } from 'lucide-react';
+import { ArrowLeft, Send, Lightbulb, CheckCircle, Loader2, User, Bot, Volume2, Save, Paperclip, X, Languages, Check, RefreshCw, Play, Pause, Download, Sparkles, Keyboard, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import AudioRecorder from './AudioRecorder';
 import SelectionToolbar from './SelectionToolbar';
 import TranslationPopover from './TranslationPopover';
@@ -289,6 +289,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const [speechRate, setSpeechRate] = useState(1);
     const [speechVoice, setSpeechVoice] = useState<'Puck' | 'Zephyr' | 'Kore' | 'Fenrir'>('Zephyr');
     const [translatingMessageIds, setTranslatingMessageIds] = useState<Set<string>>(new Set());
+    const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(true);
     
     const [stagedImage, setStagedImage] = useState<{ file: File; base64: string } | null>(null);
     const [stagedAudio, setStagedAudio] = useState<{ file: Blob; base64: string } | null>(null);
@@ -863,6 +864,19 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                     >
                         {ttsMode === 'ai' ? <Sparkles size={16} /> : <Keyboard size={16} />}
                     </button>
+                    {filteredMessages.length > 5 && (
+                        <button 
+                            onClick={() => setIsHistoryCollapsed(!isHistoryCollapsed)}
+                            className={`p-2 rounded-xl transition-all ${
+                                isHistoryCollapsed 
+                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                    : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                            }`}
+                            title={isHistoryCollapsed ? "Hiện toàn bộ tin nhắn đã ẩn" : "Thu gọn bớt các tin nhắn cũ"}
+                        >
+                            {isHistoryCollapsed ? <ChevronsUpDown size={16} /> : <ChevronsDownUp size={16} />}
+                        </button>
+                    )}
                     {onRestart && (
                         <button 
                             onClick={() => {
@@ -901,28 +915,88 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         </button>
                     </div>
                 )}
-                {filteredMessages.map((msg) => (
-                    <React.Fragment key={msg.id}>
-                        <MessageBubble message={msg} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(msg.id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
-                        {replyFailedMessageId === msg.id && (
-                            <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 border border-red-200 text-red-500 flex items-center justify-center shadow-sm"><Bot size={18} /></div>
-                                <div className="p-4 rounded-2xl bg-red-50 text-slate-700 rounded-bl-none border border-red-100 flex flex-col items-start gap-2 shadow-sm max-w-sm">
-                                    <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
-                                        <span>Gia sư gặp sự cố khi tải phản hồi...</span>
+                {isHistoryCollapsed && filteredMessages.length > 5 ? (
+                    <>
+                        <MessageBubble message={filteredMessages[0]} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(filteredMessages[0].id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
+                        
+                        <div className="flex flex-col items-center justify-center p-6 bg-slate-100/50 hover:bg-slate-100/80 border border-slate-200/60 rounded-2xl max-w-xl mx-auto my-4 transition-all shadow-sm">
+                            <div className="flex items-center gap-2 mb-1.5">
+                                <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div>
+                                <p className="text-[10px] text-teal-700 font-extrabold uppercase tracking-widest">Đã thu gọn lịch sử thảo luận</p>
+                            </div>
+                            <span className="text-sm font-semibold text-slate-700 text-center mb-3">
+                                Hệ thống tự động ẩn bớt <strong>{filteredMessages.length - 4} phản hồi cũ</strong> để màn hình rộng rãi, tập trung hơn.
+                            </span>
+                            <button 
+                                onClick={() => setIsHistoryCollapsed(false)}
+                                className="flex items-center gap-1.5 px-4.5 py-2 text-xs font-black uppercase tracking-wider bg-white border border-teal-200 text-teal-700 shadow-sm hover:bg-teal-50 hover:text-teal-800 rounded-xl transition-all cursor-pointer"
+                            >
+                                <ChevronsUpDown size={14} className="text-teal-500 animate-bounce" />
+                                <span>Xem thêm {filteredMessages.length - 4} tin nhắn cũ hơn</span>
+                            </button>
+                        </div>
+
+                        {filteredMessages.slice(-3).map((msg) => (
+                            <React.Fragment key={msg.id}>
+                                <MessageBubble message={msg} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(msg.id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
+                                {replyFailedMessageId === msg.id && (
+                                    <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 border border-red-200 text-red-500 flex items-center justify-center shadow-sm"><Bot size={18} /></div>
+                                        <div className="p-4 rounded-2xl bg-red-50 text-slate-700 rounded-bl-none border border-red-100 flex flex-col items-start gap-2 shadow-sm max-w-sm">
+                                            <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
+                                                <span>Gia sư gặp sự cố khi tải phản hồi...</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 leading-normal font-medium">Hệ thống đang quá tải tạm thời hoặc gặp sự cố mạng. Em vui lòng thử bấm gửi lại nhé.</p>
+                                            <button 
+                                                onClick={() => handleRetryReply(msg.id)}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                            >
+                                                <RefreshCw size={10} /> Gửi lại câu hỏi
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-slate-500 leading-normal font-medium">Hệ thống đang quá tải tạm thời hoặc gặp sự cố mạng. Em vui lòng thử bấm gửi lại nhé.</p>
-                                    <button 
-                                        onClick={() => handleRetryReply(msg.id)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm active:scale-95 transition-all cursor-pointer"
-                                    >
-                                        <RefreshCw size={10} /> Gửi lại câu hỏi
-                                    </button>
-                                </div>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </>
+                ) : (
+                    <>
+                        {!isHistoryCollapsed && filteredMessages.length > 5 && (
+                            <div className="flex items-center justify-center -mt-2 -mb-2">
+                                <button 
+                                    onClick={() => setIsHistoryCollapsed(true)}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-all text-xs font-bold rounded-xl cursor-pointer"
+                                    title="Thu gọn tin nhắn cũ"
+                                >
+                                    <ChevronsDownUp size={13} />
+                                    <span>Thu gọn cuộc trò chuyện</span>
+                                </button>
                             </div>
                         )}
-                    </React.Fragment>
-                ))}
+                        {filteredMessages.map((msg) => (
+                            <React.Fragment key={msg.id}>
+                                <MessageBubble message={msg} onWordDoubleClick={handleWordDoubleClick} onTranslate={handleTranslateMessage} isTranslating={translatingMessageIds.has(msg.id)} speechRate={speechRate} onSpeechRateChange={setSpeechRate} speechVoice={speechVoice} onSpeechVoiceChange={setSpeechVoice} onPlayEnglishTTS={handlePlayEnglishTTS} onPlayTranslatedTTS={handlePlayTranslatedTTS} isSpeakingMessageId={isSpeakingMessageId} isPaused={isPaused} />
+                                {replyFailedMessageId === msg.id && (
+                                    <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 border border-red-200 text-red-500 flex items-center justify-center shadow-sm"><Bot size={18} /></div>
+                                        <div className="p-4 rounded-2xl bg-red-50 text-slate-700 rounded-bl-none border border-red-100 flex flex-col items-start gap-2 shadow-sm max-w-sm">
+                                            <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
+                                                <span>Gia sư gặp sự cố khi tải phản hồi...</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 leading-normal font-medium">Hệ thống đang quá tải tạm thời hoặc gặp sự cố mạng. Em vui lòng thử bấm gửi lại nhé.</p>
+                                            <button 
+                                                onClick={() => handleRetryReply(msg.id)}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-white bg-teal-600 rounded-lg hover:bg-teal-700 shadow-sm active:scale-95 transition-all cursor-pointer"
+                                            >
+                                                <RefreshCw size={10} /> Gửi lại câu hỏi
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </>
+                )}
                 {isThinking && (
                     <div className="flex items-start gap-3 animate-pulse">
                         <div className="w-9 h-9 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/10"><Bot size={20} /></div>
