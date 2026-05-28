@@ -345,12 +345,6 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         } catch { /* ignore */ }
     };
 
-    const [suggestedTransition, setSuggestedTransition] = useState<{
-        targetSection: SectionId;
-        name: string;
-        countdown: number;
-    } | null>(null);
-
     const [isSectionCompleted, setIsSectionCompleted] = useState(false);
 
     const checkIsSectionCompleted = useCallback(() => {
@@ -383,30 +377,6 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
       [SectionId.WRITING]: "Bài viết Unit",
       [SectionId.SPEAKING]: "Luyện nói Unit",
       [SectionId.TESTS]: "Luyện giải đề (Unit)"
-    };
-
-    const detectSectionTransition = (text: string, currentSec: SectionId): SectionId | null => {
-        if (!text) return null;
-        const lowercaseText = text.toLowerCase();
-
-        // Key phrases that signal moving to another section
-        const transitionIndicators = [
-            "chuyển sang phần", "chuyển qua phần", "bước sang phần", "đi tiếp sang phần", "tiếp theo chúng ta",
-            "tiếp theo, chúng ta", "tiếp theo là phần", "học tiếp sang", "học sang phần", "sang phần",
-            "tiếp tục với phần", "bắt đầu với phần", "học phần ngữ pháp", "học phần từ vựng",
-            "học phần bài đọc", "học phần bài nghe", "học phần bài viết", "học phần luyện nói",
-            "làm bài kiểm tra", "thiết kế đề", "luyện giải đề", "move to the", "switch to the",
-            "proceed to the", "next part", "let's move to", "chuyển sang"
-        ];
-
-        const hasTransitionWord = transitionIndicators.some(word => lowercaseText.includes(word));
-        if (!hasTransitionWord) return null;
-
-        // Force sequential structure - only the immediate next sequential section is allowed, no skipping or jumping
-        const nextSec = SEQUENTIAL_FLOW[currentSec];
-        if (!nextSec) return null;
-
-        return nextSec;
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -487,66 +457,9 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     useEffect(() => { 
         if (filteredMessages.length > prevMsgLength.current) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
-            
-            // Check for section transitions suggested by the tutor
-            const lastMsg = filteredMessages[filteredMessages.length - 1];
-            if (lastMsg && lastMsg.role === 'model' && lastMsg.text) {
-                const msgId = lastMsg.id;
-                try {
-                    const list = JSON.parse(localStorage.getItem('processed_transitions') || '[]');
-                    if (!list.includes(msgId)) {
-                        // Mark processed instantly
-                        list.push(msgId);
-                        localStorage.setItem('processed_transitions', JSON.stringify(list));
-                        
-                        const targetSec = detectSectionTransition(lastMsg.text, section);
-                        if (targetSec && onSectionChange) {
-                            setSuggestedTransition({
-                                targetSection: targetSec,
-                                name: SECTION_NAMES[targetSec] || String(targetSec),
-                                countdown: 8
-                            });
-                        }
-                    }
-                } catch (e) {
-                    console.error("Transition check failed:", e);
-                }
-            }
         }
         prevMsgLength.current = filteredMessages.length;
-    }, [filteredMessages, section, onSectionChange]);
-
-    useEffect(() => {
-        if (!suggestedTransition) return;
-
-        if (suggestedTransition.countdown <= 0) {
-            const target = suggestedTransition.targetSection;
-            setSuggestedTransition(null);
-            if (onSectionChange) {
-                // Save current section as completed
-                try {
-                    const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
-                    if (!list.includes(section)) {
-                        list.push(section);
-                        localStorage.setItem('completed_sections', JSON.stringify(list));
-                    }
-                } catch (e) {}
-
-                onSectionChange(target);
-                setToastMessage({
-                    message: `Đã tự động chuyển sang phần ${SECTION_NAMES[target]} theo hướng dẫn của gia sư!`,
-                    type: "success"
-                });
-            }
-            return;
-        }
-
-        const timer = setTimeout(() => {
-            setSuggestedTransition(prev => prev ? { ...prev, countdown: prev.countdown - 1 } : null);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [suggestedTransition, onSectionChange, section]);
+    }, [filteredMessages]);
     
     const closeAllPopups = useCallback(() => {
         setPopoverData(null);
@@ -1025,19 +938,10 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                             setIsSectionCompleted(true);
                             onLessonComplete(section, lessonNumber);
 
-                            const nextSec = SEQUENTIAL_FLOW[section];
-                            if (nextSec) {
-                                setSuggestedTransition({
-                                    targetSection: nextSec,
-                                    name: SECTION_NAMES[nextSec] || String(nextSec),
-                                    countdown: 8
-                                });
-                            } else {
-                                setToastMessage({
-                                    message: "Chúc mừng em đã hoàn thành toàn bộ lộ trình học của Unit này! Xuất sắc lắm!",
-                                    type: "success"
-                                });
-                            }
+                            setToastMessage({
+                                message: "Tuyệt vời! Em đã hoàn thành xuất sắc bài học phần này. Hãy tự tin chọn phần học tiếp theo ở cột Menu bên trái nhé!",
+                                type: "success"
+                            });
                         }} 
                         className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase text-white bg-green-600 rounded-xl hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all active:scale-95"
                     >
@@ -1159,59 +1063,6 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             </div>
 
             <div className="border-t border-slate-200 bg-white/90 backdrop-blur-md p-3 md:p-6 pb-6 md:pb-8 landscape:p-2 landscape:pb-2 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-                {/* Suggested Section Transition Banner */}
-                {suggestedTransition && (
-                    <div className="mx-auto max-w-lg mb-4 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md animate-in slide-in-from-bottom-2 duration-300">
-                        <div className="flex items-center gap-3">
-                            <div className="relative flex-shrink-0 w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-200 animate-pulse">
-                                <Sparkles size={18} />
-                                <span className="absolute -top-1 -right-1 bg-teal-500 text-white rounded-full text-[8px] px-1.5 font-bold">
-                                    {suggestedTransition.countdown}s
-                                </span>
-                            </div>
-                            <div className="text-left">
-                                <span className="text-[10px] text-teal-800 font-extrabold uppercase tracking-wider block">Gợi ý lộ trình liên tục</span>
-                                <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                                    Gia sư đang hướng dẫn em chuyển sang <strong>{suggestedTransition.name}</strong>.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                            <button 
-                                onClick={() => setSuggestedTransition(null)}
-                                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-all font-semibold animate-in fade-in"
-                            >
-                                Đóng
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    const target = suggestedTransition.targetSection;
-                                    setSuggestedTransition(null);
-                                    if (onSectionChange) {
-                                        // Save current section as completed
-                                        try {
-                                            const list = JSON.parse(localStorage.getItem('completed_sections') || '[]');
-                                            if (!list.includes(section)) {
-                                                list.push(section);
-                                                localStorage.setItem('completed_sections', JSON.stringify(list));
-                                            }
-                                        } catch (e) {}
-
-                                        onSectionChange(target);
-                                        setToastMessage({
-                                            message: `Đã chuyển sang phần ${SECTION_NAMES[target]} theo hướng dẫn của gia sư!`,
-                                            type: "success"
-                                        });
-                                    }
-                                }}
-                                className="flex-shrink-0 flex items-center gap-1 px-4 py-1.5 bg-teal-600 text-white hover:bg-teal-700 text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-teal-600/15 active:scale-95 transition-all animate-bounce"
-                            >
-                                <span>Chuyển ngay</span> ➔
-                            </button>
-                        </div>
-                    </div>
-                )}
-
                 {/* Previews for staged attachments */}
                 {(stagedImage || stagedAudio) && (
                     <div className="mb-3 max-w-lg mx-auto flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -1267,7 +1118,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                         <div>
                             <h4 className="text-sm font-black text-teal-950 uppercase tracking-wider">Phần học này đã hoàn thành</h4>
                             <p className="text-xs text-slate-600 mt-1 font-bold leading-relaxed">
-                                Em đã hoàn thành xuất sắc các nội dung của phần này. Hãy chuyển tiếp sang kỹ năng tiếp theo hoặc xem lại kiến thức nhé!
+                                Em đã hoàn thành xuất sắc các nội dung của phần này. Hãy tự tin bấm trực tiếp vào các phần học khác ở Menu bên trái để tiếp tục học phần mong muốn nhé!
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-center w-full">
@@ -1281,27 +1132,10 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
                                     setIsSectionCompleted(false);
                                     if (onRestart) onRestart();
                                 }}
-                                className="flex-1 sm:flex-none px-4 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 font-bold border border-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer bg-white"
+                                className="px-5 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 font-bold border border-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer bg-white"
                             >
                                 Học lại phần này
                             </button>
-                            {SEQUENTIAL_FLOW[section] && (
-                                <button 
-                                    onClick={() => {
-                                        const target = SEQUENTIAL_FLOW[section]!;
-                                        if (onSectionChange) {
-                                            onSectionChange(target);
-                                            setToastMessage({
-                                                message: `Đã chuyển sang phần ${SECTION_NAMES[target]} để học tiếp!`,
-                                                type: "success"
-                                            });
-                                        }
-                                    }}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-teal-600 text-white hover:bg-teal-700 text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-teal-600/15 active:scale-95 transition-all animate-pulse"
-                                >
-                                    <span>Học tiếp phần {SECTION_NAMES[SEQUENTIAL_FLOW[section]!]}</span> ➔
-                                </button>
-                            )}
                         </div>
                     </div>
                 ) : (
