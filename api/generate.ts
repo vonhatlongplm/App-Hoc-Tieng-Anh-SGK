@@ -183,6 +183,45 @@ export default async function handler(req: any, res: any) {
           const isRateLimit = err.status === 429 || err.code === 429 || errStr.includes("429") || errStr.includes("exhausted") || errStr.includes("quota") || errStr.includes("rate limit") || errStr.includes("limit_exceeded");
           const isNotFoundError = err.status === 404 || err.code === 404 || errStr.includes("404") || errStr.includes("not found") || errStr.includes("not_found") || errStr.includes("unsupported");
 
+          // Self-heal: If it is a file-related or bad request error, and we passed files, try to scrub files and retry text-only
+          const isFileError = errStr.includes("file") || errStr.includes("uri") || errStr.includes("blob") || errStr.includes("not found") || errStr.includes("404") || errStr.includes("expired") || errStr.includes("400") || errStr.includes("invalid argument");
+          if (isFileError && Array.isArray(finalContents) && finalContents.some((c: any) => c.parts?.some((p: any) => p.fileData))) {
+            console.warn("[Omni-SDK-v3] Vercel API file-related error. Self-healing by scrub and text retry...");
+            const scrubbedContents = finalContents.map((c: any) => ({
+              ...c,
+              parts: c.parts?.filter((p: any) => !p.fileData) || []
+            })).filter((c: any) => c.parts.length > 0);
+
+            if (scrubbedContents.length > 0) {
+              try {
+                response = await ai.models.generateContent({ 
+                  model: modelToTry,
+                  contents: scrubbedContents,
+                  config: {
+                    systemInstruction: systemInstruction ? String(systemInstruction) : undefined,
+                    temperature: 0.7,
+                    topP: 0.95,
+                    topK: 64,
+                    maxOutputTokens: 2048,
+                    safetySettings: [
+                      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+                    ]
+                  }
+                });
+                activeModel = modelToTry;
+                lastError = null;
+                console.log(`[Omni-SDK-v3] Self-healed successfully on Vercel using text-only format on model: ${modelToTry}`);
+                modelSuccess = true;
+                break;
+              } catch (scrubErr: any) {
+                console.error("[Omni-SDK-v3] Text-only self-heal on Vercel failed as well:", scrubErr);
+              }
+            }
+          }
+
           console.warn(`[Omni-SDK-v3] Attempt ${i + 1}, Retry ${r + 1}/${retries} (${modelToTry}) failed. QuotaExceeded: ${isRateLimit}, NotFound: ${isNotFoundError}. Message: `, err.message || err);
           
           if (isRateLimit && r < retries - 1) {

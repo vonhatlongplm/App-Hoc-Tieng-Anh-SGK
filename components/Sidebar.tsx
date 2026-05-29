@@ -32,10 +32,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
     { id: SectionId.LISTENING, icon: Headphones, label: 'Bài nghe Unit' },
     { id: SectionId.WRITING, icon: PenTool, label: 'Bài viết Unit' },
     { id: SectionId.SPEAKING, icon: Mic, label: 'Luyện nói Unit' },
+    { id: SectionId.TESTS, icon: ClipboardCheck, label: 'Luyện giải đề Unit' },
   ];
 
   const extraMenuItems = [
-    { id: SectionId.TESTS, icon: ClipboardCheck, label: 'Luyện đề thi (Unit)' },
     { id: SectionId.MY_VOCABULARY, icon: Star, label: 'Tháp từ vựng', notification: hasBacklog },
     { id: SectionId.ERROR_LOG, icon: MessageSquareWarning, label: 'Nhật ký lỗi' },
     { id: SectionId.LEADERBOARD, icon: Trophy, label: 'Bảng xếp hạng' },
@@ -112,19 +112,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
                     </div>
                   </button>
                ))}
-               <button
-                  onClick={() => setSection(SectionId.TESTS)}
-                  className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all duration-200 mt-2 border border-dashed ${
-                    currentSection === SectionId.TESTS 
-                      ? 'border-indigo-400 bg-indigo-400/10 text-indigo-400' 
-                      : 'border-slate-700 text-slate-500 hover:border-indigo-400 hover:text-indigo-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <ClipboardCheck size={16} />
-                    <span className="font-black text-[10px] uppercase tracking-wider text-left">Luyện giải đề</span>
-                  </div>
-                </button>
              </div>
           </div>
         )}
@@ -132,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, setSection, isOpen, t
         {/* Learning History & stats */}
         <div>
            <p className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Hồ sơ & Cộng đồng</p>
-           {extraMenuItems.filter(i => i.id !== SectionId.TESTS).map((item) => (
+           {extraMenuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => {
