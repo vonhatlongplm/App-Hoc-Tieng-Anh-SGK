@@ -200,6 +200,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
       case SectionId.LISTENING:
       case SectionId.WRITING:
       case SectionId.SPEAKING:
+      case SectionId.TESTS:
         const currentMat = progress.uploadedMaterials?.find(m => m.id === progress.currentMaterialId) || progress.uploadedMaterials?.[0];
         if (!currentMat) return (
              <div className="flex flex-col items-center justify-center h-full p-6 text-center">
