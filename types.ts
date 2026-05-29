@@ -54,7 +54,7 @@ export interface TextbookMetadata {
 export enum SectionId {
   LIBRARY = 'Thư viện giáo trình',
   RESEARCH = 'Phòng nghiên cứu',
-  TESTS = 'Luyện giải đề thi',
+  TESTS = 'Luyện giải đề Unit',
   VOCABULARY = 'Học từ vựng',
   GRAMMAR = 'Ngữ pháp',
   LISTENING = 'Luyện nghe',

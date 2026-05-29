@@ -376,7 +376,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
       [SectionId.LISTENING]: "Bài nghe Unit",
       [SectionId.WRITING]: "Bài viết Unit",
       [SectionId.SPEAKING]: "Luyện nói Unit",
-      [SectionId.TESTS]: "Luyện giải đề (Unit)"
+      [SectionId.TESTS]: "Luyện giải đề Unit"
     };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
