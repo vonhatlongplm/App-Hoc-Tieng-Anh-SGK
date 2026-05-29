@@ -18,9 +18,10 @@ import { Menu, X, Loader2 } from 'lucide-react';
 interface MainLayoutProps {
   initialProgress: UserProgress;
   onBackToUpload: () => void;
+  onProgressUpdate?: (prog: UserProgress) => void;
 }
 
-const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload }) => {
+const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload, onProgressUpdate }) => {
   const [progress, setProgress] = useState<UserProgress>(initialProgress);
   
   // React to prop changes (essential for transitions from Upload to Main)
@@ -61,7 +62,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
   }, [progress]);
 
   const handleUpdateProgress = (updates: Partial<UserProgress>) => {
-    setProgress(prev => ({ ...prev, ...updates }));
+    setProgress(prev => {
+      const next = { ...prev, ...updates };
+      if (onProgressUpdate) {
+        onProgressUpdate(next);
+      }
+      return next;
+    });
   };
 
   const handleSaveWord = (word: VocabularyWord) => {
@@ -217,20 +224,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ initialProgress, onBackToUpload
             addMessage={(msg) => {
                 setProgress(prev => {
                     const currentMsgs = prev.messages || [];
-                    return {
+                    const next = {
                         ...prev,
                         messages: [...currentMsgs, msg]
                     };
+                    if (onProgressUpdate) {
+                        onProgressUpdate(next);
+                    }
+                    return next;
                 });
             }}
             setMessages={(msgs) => {
                 setProgress(prev => {
                     const currentMsgs = prev.messages || [];
                     const nextMsgs = typeof msgs === 'function' ? (msgs as any)(currentMsgs) : msgs;
-                    return {
+                    const next = {
                         ...prev,
                         messages: nextMsgs as Message[]
                     };
+                    if (onProgressUpdate) {
+                        onProgressUpdate(next);
+                    }
+                    return next;
                 });
             }}
             savedVocabulary={progress.vocabulary || []}

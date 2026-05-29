@@ -235,7 +235,7 @@ const App: React.FC = () => {
 
       {currentScreen === 'MAIN' && (
         progress ? (
-          <MainLayout initialProgress={progress} onBackToUpload={() => setCurrentScreen('UPLOAD')} />
+          <MainLayout initialProgress={progress} onBackToUpload={() => setCurrentScreen('UPLOAD')} onProgressUpdate={setProgress} />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-white grow">
             <div className="text-center">

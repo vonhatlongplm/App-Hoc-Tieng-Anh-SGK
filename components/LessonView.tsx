@@ -382,7 +382,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const viewContainerRef = useRef<HTMLDivElement>(null);
 
-    const isDiagnosticTest = section === SectionId.PHONICS || section === SectionId.TESTS;
+    const isDiagnosticTest = (section === SectionId.PHONICS || section === SectionId.TESTS) && !documentContent;
     const filteredMessages = useMemo(() => messages.filter(msg => (isDiagnosticTest ? msg.context?.section === SectionId.TESTS : (msg.context?.section === section && msg.context?.lessonNumber === lessonNumber))), [messages, section, lessonNumber, isDiagnosticTest]);
     
     // Auto-start lesson if empty
@@ -402,7 +402,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             hasStartedRef.current = true;
             const startLesson = async () => {
                 if (isDiagnosticTest) {
-                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'model', text: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: 'tests', lessonNumber: 0 } });
+                    addMessage({ id: `init-diagnostic-${Date.now()}`, role: 'model', text: DIAGNOSTIC_PROMPT_EN, type: 'text', timestamp: Date.now(), context: { section: SectionId.TESTS, lessonNumber: 0 } });
                 } else {
                     setIsThinking(true);
                     try {
@@ -614,7 +614,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
             setIsProcessingAudio(true);
 
             // Handle diagnostic speaking step specially
-            if (section === SectionId.PHONICS && diagnosticStep === 'speaking') {
+            if (isDiagnosticTest && (section === SectionId.PHONICS || section === SectionId.TESTS) && diagnosticStep === 'speaking') {
                 setDiagnosticStep('submitting');
                 addMessage({ 
                     id: `msg-${Date.now()}`, 
@@ -669,7 +669,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         }
 
         // 3. TEXT-ONLY FLOW (Default)
-        if (section === SectionId.TESTS && diagnosticStep !== 'speaking' && !trimmedText) {
+        if (isDiagnosticTest && section === SectionId.TESTS && diagnosticStep !== 'speaking' && !trimmedText) {
             setIsThinking(false);
             return;
         }
@@ -679,7 +679,7 @@ const LessonView: React.FC<LessonViewProps> = ({ section, lessonNumber, lessonTi
         lastRespondedMsgId.current = userMessage.id;
         setReplyFailedMessageId(null);
 
-        if (section === SectionId.TESTS) {
+        if (isDiagnosticTest && section === SectionId.TESTS) {
             if (diagnosticStep === 'grammar') {
                 setDiagnosticGrammarAnswers(trimmedText);
                 addMessage({ id: `msg-${Date.now()+1}`, role: 'model', text: "Hệ thống ghi nhận. Tiếp theo, hãy viết một đoạn văn ngắn (20-30 từ) mô tả về sở thích hoặc gia đình của bạn.", type: 'text', timestamp: Date.now()+1, context: { section: SectionId.TESTS, lessonNumber: 0 } });
